@@ -1,0 +1,16 @@
+flask
+flask-cors
+reportlab
+Pillow
+numpy
+torch
+torchvision
+opencv-python
+scikit-image
+scikit-learn
+matplotlib
+pandas
+scipy
+networkx
+einops
+# Optional: cupy or cupy-cuda12x for GPU-accelerated ColorWheel FFT.

@@ -1,0 +1,36 @@
+# Keep the build context small. Without this, Docker would send several GB of
+# virtualenvs, node_modules and research data to the build daemon.
+
+.git
+.venv
+.conda
+venv
+env
+
+# Rebuilt inside the image.
+afm-frontend/node_modules
+afm-frontend/.next
+**/__pycache__
+**/*.py[cod]
+
+# Local runtime state and research data the app does not need in order to run.
+uploads
+results
+figure_scripts
+non-ess
+docs
+afm-backend/uploads
+afm-backend/results
+afm-backend/segmentation_output
+afm-backend/voronoi_outputs
+afm-backend/colorwheel_output
+afm-backend/colorwheel_temp
+afm-backend/afm_runtime/voronoi_outputs
+
+# Local config and secrets - must never be baked into an image.
+.ngrok.runtime.yml
+afm-frontend/.env.local
+*.log
+
+.vscode
+.idea
