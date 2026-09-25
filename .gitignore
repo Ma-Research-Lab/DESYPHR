@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+.conda/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Local environment and secrets
+.env
+.env.local
+.ngrok.runtime.yml
+
+# Logs
+*.log
+
+# Runtime output
+uploads/
+results/
+afm-backend/uploads/
+afm-backend/results/
+afm-backend/segmentation_output/
+afm-backend/voronoi_outputs/
+afm-backend/colorwheel_output/
+afm-backend/colorwheel_temp/
+afm-backend/afm_runtime/voronoi_outputs/
+
+# Local research/figure tooling, not part of the app
+figure_scripts/
+non-ess/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.ipynb_checkpoints/

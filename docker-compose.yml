@@ -1,0 +1,16 @@
+services:
+  afm:
+    build:
+      context: .
+    image: afm-analysis-platform:latest
+    container_name: afm-analysis
+    ports:
+      # host:container - change the left number if 3000 is already taken,
+      # e.g. "3001:3000" then open http://localhost:3001
+      - "3000:3000"
+    volumes:
+      # Keep uploads and generated reports on your computer, so they survive
+      # the container being stopped or rebuilt.
+      - ./uploads:/app/uploads
+      - ./results:/app/results
+    restart: unless-stopped
