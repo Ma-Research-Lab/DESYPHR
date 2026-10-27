@@ -20,9 +20,13 @@ out/
 # Logs
 *.log
 
-# Runtime output
-uploads/
-results/
+# Runtime output. The top-level uploads/ and results/ folders are kept in the
+# repo (empty) so a fresh clone owns them; if Docker has to create these bind
+# mounts itself they are root-owned and the container cannot write to them.
+**/uploads/*
+**/results/*
+!/uploads/.gitkeep
+!/results/.gitkeep
 afm-backend/uploads/
 afm-backend/results/
 afm-backend/segmentation_output/
