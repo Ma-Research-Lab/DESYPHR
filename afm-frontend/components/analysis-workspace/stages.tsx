@@ -1190,7 +1190,7 @@ export function ResultsStage({
 
                 {currentItem.predicted_class === "dots" || currentItem.predicted_class === "mixed" ? (
                   <>
-                    <SliderRow label="Voronoi Edge Threshold" min={0.005} max={0.1} step={0.005} value={voronoiThresholdEdge} onChange={setVoronoiThresholdEdge} />
+                    <SliderRow label="Voronoi Spacing Tolerance" min={0.05} max={0.5} step={0.01} value={voronoiThresholdEdge} onChange={setVoronoiThresholdEdge} />
                     <SliderRow label="Voronoi Max Size" min={256} max={2048} step={128} value={voronoiMaxSize} onChange={(value) => setVoronoiMaxSize(Math.round(value))} />
                     <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
                       <span>Voronoi Packing Pattern</span>

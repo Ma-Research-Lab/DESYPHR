@@ -92,7 +92,7 @@ export default function AnalysisWorkspace() {
   const [showAdvancedImageOptions, setShowAdvancedImageOptions] = useState(false);
   const [colorwheelClusters, setColorwheelClusters] = useState(5);
   const [showColorwheelDebug, setShowColorwheelDebug] = useState(false);
-  const [voronoiThresholdEdge, setVoronoiThresholdEdge] = useState(0.025);
+  const [voronoiThresholdEdge, setVoronoiThresholdEdge] = useState(0.25);
   const [voronoiMaxSize, setVoronoiMaxSize] = useState(1024);
   const [voronoiPackingEdges, setVoronoiPackingEdges] = useState<4 | 6>(6);
   const [voronoiExtractDots, setVoronoiExtractDots] = useState(true);

@@ -11,6 +11,7 @@ from afm_runtime.utils.dan_binarization import (
     analyze_spacing as dan_analyze_spacing,
     binarize as dan_binarize,
 )
+from afm_runtime.utils.domain_spacing import compute_domain_spacing_from_array
 from afm_runtime.utils.dot_extraction import extract_dots
 from afm_runtime.utils.image_processing import (
     confidence_to_base64,
@@ -253,6 +254,16 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
         # the reviewed U-Net mask stays raw for display/editing, then the
         # Voronoi branch inverts it before dot extraction / tessellation.
         voronoi_input = 255 - mask_array
+
+        # Measure domain spacing on the mask with all features, before dot
+        # extraction strips the line features out of mixed images.
+        full_mask_spacing_nm = None
+        try:
+            full_mask_spacing = compute_domain_spacing_from_array(mask_array, image_size_um, input_is_mask=True)
+            full_mask_spacing_nm = full_mask_spacing.get("spacing_nm")
+        except Exception as e:
+            detail_lines.append(f"Full-mask domain spacing error: {e}")
+
         dot_stats = None
         extract_dots_flag = bool(item_payload.get("extract_dots", predicted_class in {"dots", "mixed"}))
         if extract_dots_flag:
@@ -282,9 +293,10 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
         voronoi = run_voronoi(
             voronoi_input,
             image_size_um=image_size_um,
-            threshold_edge=float(item_payload.get("threshold_edge", 0.025)),
+            threshold_edge=float(item_payload.get("threshold_edge", 0.25)),
             max_size=int(item_payload.get("max_size", 1024)),
             packing_edges=int(item_payload.get("packing_edges", 6)),
+            domain_spacing_nm=full_mask_spacing_nm,
         )
 
         if dot_stats:

@@ -678,7 +678,7 @@ def knn_with_epsilon(dot_coords, n_neighbors=6, epsilon = 15):
 #image_save_location = 'renamed_png_images/summary'
 image_save_location = 'test_images/analyzed_A_AC.tiff'
 
-def analyze_image(image_data, image_name, image_size, save_image=True, show_image=False, save_location=image_save_location, packing_edges=6, threshold_edge=0.65):
+def analyze_image(image_data, image_name, image_size, save_image=True, show_image=False, save_location=image_save_location, packing_edges=6, threshold_edge=0.25, domain_spacing_nm=None):
 
     # make a folder for saving results
     if save_image == True:
@@ -727,6 +727,12 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
     # find the sample periodicity and FWHM:
     period, fwhm = char_periodicity(image_data, width, height, pxls_to_um)  # period in inverse pixels
     period = float(width / period)  # period in pixels
+
+    # Prefer a domain spacing measured upstream on the image with all features;
+    # the FFT of a dots-only mask overestimates the spacing for mixed images.
+    if domain_spacing_nm is not None:
+        period = float(domain_spacing_nm) * pxls_to_um / 1000  # period in pixels
+        print(f'using provided domain spacing: {domain_spacing_nm} nm ({period} px)')
 
     period_nm = period * 1000 / (float(pxls_to_um))
     fwhm_inv_nm = fwhm / float(pxls_to_um)
@@ -914,20 +920,10 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
         # Initialize a dictionary to store groups based on edge counts
         edge_groups = {4: [], 5: [], 6: [], 7: [], 'others': []}
 
-        # Calculate areas and collect all finite-region edges.  The edge-length
-        # distribution is shared across the image so one cell does not lose its
-        # shortest edge merely because it has only four or six edges.
-        edge_lengths_all = []
+        # Calculate areas of finite regions
         for region_idx, region in enumerate(vor.regions):
             if not region or -1 in region:
                 continue
-
-            for i in range(len(region)):
-                start_vertex = vor.vertices[region[i]]
-                end_vertex = vor.vertices[region[(i + 1) % len(region)]]
-                edge_length = np.linalg.norm(start_vertex - end_vertex)
-                if np.isfinite(edge_length):
-                    edge_lengths_all.append(edge_length)
 
             # Get vertices of the region
             polygon = [vor.vertices[i] for i in region]
@@ -944,9 +940,25 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
         # Plot the Voronoi diagram (with flipped vertices)
         voronoi_plot_2d(vor, ax=plt.gca(), show_points=False, show_vertices=False, line_colors='crimson', line_width=1, line_alpha=0.5)
 
-        global_edge_length_floor = np.percentile(edge_lengths_all, 2.5) if edge_lengths_all else 0.0
+        # An edge is significant when the two dots it separates sit within
+        # threshold_edge of the expected dot-dot distance from the domain spacing (in pixels).
+        # This avoids relying on the image's own edge-length distribution,
+        # which is unreliable when only a few dots are present (e.g. mixed images).
+        # For hexagonal packing the FFT domain spacing is the row spacing, so the
+        # nearest-neighbour dot distance is 2/sqrt(3) times larger.
+        expected_dot_distance = period * 2 / np.sqrt(3) if packing_edges == 6 else period
+        spacing_tolerance = threshold_edge * expected_dot_distance
+        print(f'domain spacing: {period} px, expected dot-dot distance: {expected_dot_distance} px, tolerance: +/-{spacing_tolerance} px')
 
-        # Process each region and apply edge length filtering
+        # Map each point to the dot-dot distances of its Voronoi neighbours
+        neighbor_distances = {i: [] for i in range(len(vor.points))}
+        for p, q in vor.ridge_points:
+            dot_distance = np.linalg.norm(vor.points[p] - vor.points[q])
+            neighbor_distances[p].append(dot_distance)
+            neighbor_distances[q].append(dot_distance)
+        region_to_point = {region_idx: point_idx for point_idx, region_idx in enumerate(vor.point_region)}
+
+        # Process each region and apply dot-dot distance filtering
         for region_idx, region in enumerate(vor.regions):
             # Skip regions containing -1 (vertex at infinity) or empty regions
             if not region or -1 in region:
@@ -959,32 +971,14 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
                 for i in region
             )
 
-            # Calculate lengths of each edge for the region
-            edge_lengths = []
-            for i in range(len(region)):
-                start_vertex = vor.vertices[region[i]]
-                end_vertex = vor.vertices[region[(i + 1) % len(region)]]
-                edge_length = np.linalg.norm(start_vertex - end_vertex)
-                edge_lengths.append(edge_length)
-
-            # Keep edges above the bottom five percent of the image-wide
-            # distribution.  Use >= so equal-length edges at the cutoff stay
-            # together instead of causing an otherwise ordered cell to fail.
-            upper_lim = (1-threshold_edge) + 1
-            lower_lim = threshold_edge
-            #print(f'Upper limit: {upper_lim}, lower limit: {lower_lim}')
-            avg_edge_length = np.mean(edge_lengths)
-            max_edge = max(edge_lengths)
-            significant_edges = [length for length in edge_lengths if length >= global_edge_length_floor]
-            print(f'significant edges are: {significant_edges}')
+            dot_distances = neighbor_distances[region_to_point[region_idx]]
+            significant_edges = [d for d in dot_distances if abs(d - expected_dot_distance) <= spacing_tolerance]
+            print(f'significant neighbour distances are: {significant_edges}')
             significant_edge_count = len(significant_edges)
             print(f'number of significant edges: {significant_edge_count}')
-            threshold = 1.0
 
-            # Assign fill color based on the number of significant edges
-            # Main changes from here
-            ratio_ok = min(significant_edges) >= lower_lim * max(significant_edges) if significant_edges else False
-            if significant_edge_count == packing_edges and ratio_ok:
+            # A cell is ordered when exactly packing_edges neighbours sit at the expected dot-dot distance
+            if significant_edge_count == packing_edges:
                 print(f'Cell determined ordered: {region_idx}')
                 edge_groups[packing_edges].append(region_idx)
             else:

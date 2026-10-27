@@ -321,6 +321,18 @@ def create_routes(app, model_manager, cnn_classifier=None):
 
             mask_img = _decode_base64_image(data['mask_base64']).convert('L')
             mask_array = np.array(mask_img)
+            image_size = float(data.get('image_size_um', 1.0))
+
+            # Measure domain spacing on the mask with all features, before dot
+            # extraction strips the line features out of mixed images.
+            full_mask_spacing_nm = None
+            try:
+                from ..utils.domain_spacing import compute_domain_spacing_from_array
+                full_mask_spacing_nm = compute_domain_spacing_from_array(
+                    mask_array, image_size, input_is_mask=True
+                ).get('spacing_nm')
+            except Exception:
+                traceback.print_exc()
 
             # ── Optional dot extraction (for mixed / dots morphology) ──
             extract_dots_flag = str(data.get('extract_dots', 'false')).lower() == 'true'
@@ -347,12 +359,11 @@ def create_routes(app, model_manager, cnn_classifier=None):
                 dots_pil.save(buf, format='PNG')
                 dot_stats['dots_mask_base64'] = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
 
-            image_size = float(data.get('image_size_um', 1.0))
-            threshold_edge = float(data.get('threshold_edge', 0.025))
+            threshold_edge = float(data.get('threshold_edge', 0.25))
             max_size = int(data.get('max_size', 1024))
             packing_edges = int(data.get('packing_edges', 6))
 
-            result = run_voronoi(mask_array, image_size, threshold_edge, max_size, packing_edges)
+            result = run_voronoi(mask_array, image_size, threshold_edge, max_size, packing_edges, full_mask_spacing_nm)
             if dot_stats:
                 result['dot_extraction'] = dot_stats
             return jsonify(result)

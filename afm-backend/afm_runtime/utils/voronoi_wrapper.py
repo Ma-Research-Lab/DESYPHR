@@ -50,7 +50,7 @@ def _img_to_base64(img_path):
     return f"data:{mime};base64,{base64.b64encode(data).decode()}"
 
 
-def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=1024, packing_edges=6):
+def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.25, max_size=1024, packing_edges=6, domain_spacing_nm=None):
     """
     Run Voronoi analysis on a mask image.
 
@@ -60,6 +60,8 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=10
         threshold_edge: edge detection threshold for Voronoi
         max_size: max dimension for downsampling
         packing_edges: 6 for hexagonal packing or 4 for square/cubic-style packing
+        domain_spacing_nm: optional domain spacing measured on the full mask; used
+            in place of the engine's own FFT periodicity when given
 
     Returns:
         dict with analysis results and base64-encoded overlay images
@@ -91,6 +93,13 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=10
             'success': False,
             'error': 'packing_edges must be 4 (square/cubic) or 6 (hexagonal)',
         }
+
+    try:
+        domain_spacing_nm = float(domain_spacing_nm) if domain_spacing_nm is not None else None
+    except (TypeError, ValueError):
+        domain_spacing_nm = None
+    if domain_spacing_nm is not None and not (np.isfinite(domain_spacing_nm) and domain_spacing_nm > 0):
+        domain_spacing_nm = None
 
     # Normalise to float 0-1
     data = mask_array.astype(np.float64) / 255.0
@@ -126,6 +135,7 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=10
             save_location=tmpdir,
             packing_edges=packing_edges,
             threshold_edge=threshold_edge,
+            domain_spacing_nm=domain_spacing_nm,
         )
 
         # Read output images and convert to base64
@@ -142,6 +152,7 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=10
             'warnings': [],
             'results': {},
             'packing_edges': packing_edges,
+            'domain_spacing_nm': domain_spacing_nm,
             'overlay_base64': _img_to_base64(overlay_path),
             'morphology_map_base64': _img_to_base64(morphology_path),
             'original_base64': _img_to_base64(original_path),
@@ -277,6 +288,7 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.025, max_size=10
                 'threshold_edge': threshold_edge,
                 'max_size': max_size,
                 'packing_edges': packing_edges,
+                'domain_spacing_nm': domain_spacing_nm,
                 'auto_inverted': inverted,
                 'downsampled': downsampled,
                 'original_shape': list(original_shape),
