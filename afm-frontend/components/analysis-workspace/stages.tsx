@@ -5,7 +5,6 @@ import type { Dispatch, MouseEventHandler, RefObject, SetStateAction } from "rea
 import {
   runButtonStyle,
   secondaryButtonStyle,
-  secondaryLargeButtonStyle,
   smallLabelStyle,
   toolButtonStyle,
 } from "./helpers";
@@ -30,8 +29,154 @@ export function UploadStage({
   selectedFiles,
   selectedFilePreviewUrls,
   setSelectedFiles,
-  handleUpload,
-  isUploading,
+  batchData,
+}: {
+  hiddenFileInputRef: RefObject<HTMLInputElement | null>;
+  isDragActive: boolean;
+  setIsDragActive: Dispatch<SetStateAction<boolean>>;
+  setFilesFromInput: (files: File[], append?: boolean) => void;
+  selectedFiles: File[];
+  selectedFilePreviewUrls: string[];
+  setSelectedFiles: Dispatch<SetStateAction<File[]>>;
+  batchData: UploadBatchResponse | null;
+}) {
+  const hasFiles = selectedFiles.length > 0;
+
+  return (
+    <Panel title="Input Batch">
+      <div
+        onClick={() => hiddenFileInputRef.current?.click()}
+        onDragEnter={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragActive(true);
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragActive(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragActive(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragActive(false);
+          setFilesFromInput(Array.from(e.dataTransfer.files || []), true);
+        }}
+        style={{
+          border: "1px dashed var(--border)",
+          borderRadius: 6,
+          padding: hasFiles ? "18px 24px" : "clamp(32px, 7vw, 64px) 24px",
+          textAlign: "center",
+          cursor: "pointer",
+          background: isDragActive ? "var(--accentTintStrong)" : "var(--surface2)",
+        }}
+      >
+        <input
+          ref={hiddenFileInputRef}
+          type="file"
+          accept=".jpg,.jpeg,.png,.tif,.tiff"
+          multiple
+          onChange={(e) => setFilesFromInput(Array.from(e.target.files || []), true)}
+          style={{ display: "none" }}
+        />
+        {!hasFiles ? <div style={{ fontSize: "2.4rem", color: "var(--accent)", opacity: 0.8 }}>⤴</div> : null}
+        <div style={{ fontSize: hasFiles ? "0.88rem" : "1rem", fontWeight: 700, letterSpacing: "0.05em" }}>
+          {hasFiles ? "+ Add more images" : "Drop AFM images here"}
+        </div>
+        <div style={{ fontSize: "0.73rem", color: "var(--muted)", marginTop: 4 }}>
+          {hasFiles ? "Drop or click to browse" : "or click to browse · JPG, PNG, TIFF · multiple files supported"}
+        </div>
+      </div>
+
+      {hasFiles ? (
+        <div style={{ marginTop: 16 }}>
+          <div style={smallLabelStyle}>
+            {selectedFiles.length} file{selectedFiles.length === 1 ? "" : "s"} selected
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 10 }}>
+            {selectedFiles.map((file, idx) => (
+              <div
+                key={`${file.name}-${idx}`}
+                className="ws-row"
+                style={{
+                  position: "relative",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: 6,
+                  background: "var(--surface2)",
+                  minWidth: 0,
+                }}
+              >
+                <div style={{ aspectRatio: "1 / 1", borderRadius: 4, overflow: "hidden", background: "var(--imageBg)" }}>
+                  {selectedFilePreviewUrls[idx] ? (
+                    <img
+                      src={selectedFilePreviewUrls[idx]}
+                      alt={file.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    />
+                  ) : null}
+                </div>
+                <div
+                  title={file.name}
+                  style={{
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    marginTop: 6,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {idx + 1}. {file.name}
+                </div>
+                <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>{(file.size / 1024).toFixed(1)} KB</div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
+                  title="Remove file"
+                  aria-label={`Remove ${file.name}`}
+                  className="px-flat"
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    border: "1px solid var(--border)",
+                    background: "var(--surface)",
+                    color: "var(--muted)",
+                    borderRadius: 4,
+                    width: 24,
+                    height: 24,
+                    lineHeight: "20px",
+                    textAlign: "center",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                    padding: 0,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {batchData?.items?.length ? (
+        <div style={{ marginTop: 14, fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
+          {batchData.items.length} image{batchData.items.length === 1 ? " is" : "s are"} already uploaded. Uploading again
+          starts the review over and clears mask edits and results.
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+export function ReviewStage({
   batchData,
   analysisMap,
   editedMaskMap,
@@ -40,7 +185,6 @@ export function UploadStage({
   onClassificationOverride,
   saveCurrentCanvasForItem,
   setSelectedItemId,
-  setActiveTab,
   badgeClass,
   showAdvancedImageOptions,
   setShowAdvancedImageOptions,
@@ -68,22 +212,10 @@ export function UploadStage({
   flashLayerId,
   selectedLayerId,
   removeStrokeById,
-  status,
-  handleRunAnalysis,
-  isRunning,
   maskLayerId,
   canvasSize,
   isResegmenting,
 }: {
-  hiddenFileInputRef: RefObject<HTMLInputElement | null>;
-  isDragActive: boolean;
-  setIsDragActive: Dispatch<SetStateAction<boolean>>;
-  setFilesFromInput: (files: File[], append?: boolean) => void;
-  selectedFiles: File[];
-  selectedFilePreviewUrls: string[];
-  setSelectedFiles: Dispatch<SetStateAction<File[]>>;
-  handleUpload: () => void;
-  isUploading: boolean;
   batchData: UploadBatchResponse | null;
   analysisMap: Record<string, AnalysisResponse>;
   editedMaskMap: Record<string, string>;
@@ -92,7 +224,6 @@ export function UploadStage({
   onClassificationOverride: (itemId: string, predictedClass: string) => void;
   saveCurrentCanvasForItem: (itemId?: string) => void;
   setSelectedItemId: Dispatch<SetStateAction<string>>;
-  setActiveTab: Dispatch<SetStateAction<"upload" | "results" | "export">>;
   badgeClass: (name?: string) => string;
   showAdvancedImageOptions: boolean;
   setShowAdvancedImageOptions: Dispatch<SetStateAction<boolean>>;
@@ -120,9 +251,6 @@ export function UploadStage({
   flashLayerId: string;
   selectedLayerId: string;
   removeStrokeById: (strokeId: string) => void;
-  status: string;
-  handleRunAnalysis: () => void;
-  isRunning: boolean;
   maskLayerId: string;
   canvasSize: number;
   isResegmenting: boolean;
@@ -141,171 +269,8 @@ export function UploadStage({
   const checkboxRowStyle = { display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 18 }}>
+    <div className="wiz-review">
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <Panel title="Input Batch">
-          <div
-            onClick={() => hiddenFileInputRef.current?.click()}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsDragActive(true);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsDragActive(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsDragActive(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsDragActive(false);
-              const files = Array.from(e.dataTransfer.files || []);
-              setFilesFromInput(files, true);
-            }}
-            style={{
-              border: "1px dashed var(--border)",
-              borderRadius: 6,
-              padding: "36px 24px",
-              textAlign: "center",
-              cursor: "pointer",
-              background: isDragActive ? "var(--accentTintStrong)" : "var(--surface2)",
-            }}
-          >
-            <input
-              ref={hiddenFileInputRef}
-              type="file"
-              accept=".jpg,.jpeg,.png,.tif,.tiff"
-              multiple
-              onChange={(e) => {
-                const files = Array.from(e.target.files || []);
-                setFilesFromInput(files, true);
-              }}
-              style={{ display: "none" }}
-            />
-            <div style={{ fontSize: "2.4rem", color: "var(--accent)", opacity: 0.8 }}>⤴</div>
-            <div style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.05em" }}>
-              {selectedFiles.length
-                ? `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"} selected`
-                : "Drop AFM images here"}
-            </div>
-            <div style={{ fontSize: "0.73rem", color: "var(--muted)", marginTop: 4 }}>
-              {selectedFiles.length
-                ? "Batch ready. Click upload below."
-                : "or click to browse multiple files"}
-            </div>
-          </div>
-
-          {!!selectedFiles.length && (
-            <div style={{ marginTop: 12 }}>
-              <div style={smallLabelStyle}>Selected Files</div>
-              <div
-                className="file-list-scroll"
-                style={{
-                  maxHeight: 300,
-                  overflowY: "auto",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  background: "var(--surface2)",
-                }}
-              >
-                {selectedFiles.map((file, idx) => (
-                  <div
-                    key={`${file.name}-${idx}`}
-                    style={{
-                      padding: "8px 10px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      borderBottom:
-                        idx === selectedFiles.length - 1 ? "none" : "1px solid var(--border)",
-                      fontSize: "0.74rem",
-                      color: "var(--text)",
-                    }}
-                  >
-                    {selectedFilePreviewUrls[idx] ? (
-                      <img
-                        src={selectedFilePreviewUrls[idx]}
-                        alt={file.name}
-                        style={{
-                          width: 64,
-                          height: 64,
-                          objectFit: "cover",
-                          borderRadius: 4,
-                          border: "1px solid var(--border)",
-                          background: "var(--imageBg)",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: 64,
-                          height: 64,
-                          borderRadius: 4,
-                          border: "1px solid var(--border)",
-                          background: "var(--surface)",
-                          flexShrink: 0,
-                        }}
-                      />
-                    )}
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          maxWidth: 300,
-                        }}
-                      >
-                        {idx + 1}. {file.name}
-                      </div>
-                      <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
-                        {(file.size / 1024).toFixed(1)} KB
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFiles((prev) => prev.filter((_, i) => i !== idx));
-                      }}
-                      title="Remove file"
-                      className="px-flat"
-                      style={{
-                        border: "1px solid var(--border)",
-                        background: "var(--surface)",
-                        color: "var(--muted)",
-                        borderRadius: 4,
-                        width: 24,
-                        height: 24,
-                        lineHeight: "20px",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        fontWeight: 700,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={handleUpload} disabled={isUploading} style={runButtonStyle}>
-              {isUploading ? "Running..." : selectedFiles.length <= 1 ? "Upload" : "Upload Batch"}
-            </button>
-            <span style={{ fontSize: "0.73rem", color: "var(--muted)" }} />
-          </div>
-        </Panel>
-
         <Panel title="Batch Items">
           {batchData?.items?.length ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -321,7 +286,6 @@ export function UploadStage({
                     onClick={() => {
                       saveCurrentCanvasForItem(currentItem?.item_id);
                       setSelectedItemId(item.item_id);
-                      setActiveTab("upload");
                     }}
                     style={{
                       textAlign: "left",
@@ -960,30 +924,6 @@ export function UploadStage({
           ) : null}
         </Panel>
 
-        <div style={{ display: "flex", alignItems: "center", padding: "16px 0", flexWrap: "wrap", gap: 10 }}>
-          <button onClick={handleRunAnalysis} disabled={isRunning || !batchData?.items?.length} style={runButtonStyle}>
-            {isRunning ? "Running..." : "Run Analysis"}
-          </button>
-          <span style={{ fontSize: "0.73rem", color: "var(--muted)" }} />
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "10px 14px",
-            borderRadius: 4,
-            fontSize: "0.78rem",
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            color: "var(--text)",
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          <span>●</span>
-          <span>{status}</span>
-        </div>
       </div>
     </div>
   );
@@ -1431,51 +1371,62 @@ export function ResultsStage({
 }
 
 export function ExportStage({
-  handleNewJob,
+  currentItem,
   handleExportCurrentPdf,
   currentAnalysis,
-  isExporting,
+  exportTarget,
   handleExportBatchPdf,
   handleExportCsv,
   analysisMap,
 }: {
-  handleNewJob: () => void;
+  currentItem: UploadItem | null;
   handleExportCurrentPdf: () => void;
   currentAnalysis: AnalysisResponse | null;
-  isExporting: boolean;
+  exportTarget: "current" | "batch" | null;
   handleExportBatchPdf: () => void;
   handleExportCsv: () => void;
   analysisMap: Record<string, AnalysisResponse>;
 }) {
+  const analyzedCount = Object.keys(analysisMap).length;
+  const isExporting = exportTarget !== null;
+  const cards = [
+    {
+      title: "Selected image",
+      detail: `${currentItem?.original_filename || "No image selected"} as a single PDF report.`,
+      label: exportTarget === "current" ? "Exporting..." : "⭳ Download PDF",
+      onClick: handleExportCurrentPdf,
+      disabled: !currentAnalysis || isExporting,
+    },
+    {
+      title: "Whole batch",
+      detail: `All ${analyzedCount} analyzed image${analyzedCount === 1 ? "" : "s"} combined into one PDF.`,
+      label: exportTarget === "batch" ? "Exporting..." : "⭳ Download batch PDF",
+      onClick: handleExportBatchPdf,
+      disabled: !analyzedCount || isExporting,
+    },
+    {
+      title: "Results table",
+      detail: "Key metrics for every analyzed image as a CSV file.",
+      label: "⭳ Download CSV",
+      onClick: handleExportCsv,
+      disabled: !analyzedCount,
+    },
+  ];
+
   return (
-    <div>
-      <Panel title="Export Results" style={{ marginBottom: 18 }}>
-        <div style={{ color: "var(--muted)", fontSize: "0.76rem", marginBottom: 16 }}>
-          Export the selected result or the full analyzed batch.
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={handleNewJob} style={secondaryLargeButtonStyle}>
-            ⟲ New Job
-          </button>
-          <button onClick={handleExportCurrentPdf} disabled={!currentAnalysis || isExporting} style={runButtonStyle}>
-            {isExporting ? "Exporting..." : "⭳ Export Selected PDF"}
-          </button>
-          <button
-            onClick={handleExportBatchPdf}
-            disabled={!Object.keys(analysisMap).length || isExporting}
-            style={runButtonStyle}
-          >
-            {isExporting ? "Exporting..." : "⭳ Export Batch PDF"}
-          </button>
-          <button
-            onClick={handleExportCsv}
-            disabled={!Object.keys(analysisMap).length}
-            style={runButtonStyle}
-          >
-            ⭳ Export Results CSV
-          </button>
-        </div>
-      </Panel>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 16 }}>
+      {cards.map((card) => (
+        <Panel key={card.title} title={card.title}>
+          <div style={{ display: "grid", gap: 16 }}>
+            <div style={{ color: "var(--muted)", fontSize: "0.76rem", lineHeight: 1.6, overflowWrap: "anywhere" }}>
+              {card.detail}
+            </div>
+            <button onClick={card.onClick} disabled={card.disabled} style={runButtonStyle}>
+              {card.label}
+            </button>
+          </div>
+        </Panel>
+      ))}
     </div>
   );
 }

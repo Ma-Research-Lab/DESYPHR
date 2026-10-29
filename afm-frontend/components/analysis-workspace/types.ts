@@ -85,6 +85,8 @@ export type EditorSnapshot = {
 
 export type ThemeMode = "light" | "dark" | "retro";
 
+export type WorkspaceStep = "upload" | "review" | "results" | "export";
+
 export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: "light", label: "Default" },
   { value: "dark", label: "Dark" },

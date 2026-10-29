@@ -10,12 +10,8 @@ import {
   getInitialThemeMode,
   getOrCreateClientSessionId,
   isBackendReachable,
+  runButtonStyle,
 } from "./analysis-workspace/helpers";
-import {
-  WorkspaceHeader,
-  WorkspaceStageTabs,
-  WorkspaceStepper,
-} from "./analysis-workspace/header";
 import {
   buildDisplayedOutputs,
   buildLineDiagnosticsOutputs,
@@ -27,13 +23,15 @@ import {
 import {
   GlobalWorkspaceStyles,
   ImageViewerModal,
-  WorkspaceFooter,
 } from "./analysis-workspace/layout";
 import {
   ExportStage,
   ResultsStage,
+  ReviewStage,
   UploadStage,
 } from "./analysis-workspace/stages";
+import { WIZARD_STEPS, WizardBar, WizardHead, WizardSidebar, WizardStyles } from "./analysis-workspace/wizard";
+import type { WizardTabState } from "./analysis-workspace/wizard";
 import type {
   AnalysisParams,
   AnalysisResponse,
@@ -47,6 +45,7 @@ import type {
   UploadBatchResponse,
   UploadItem,
   ViewerImage,
+  WorkspaceStep,
 } from "./analysis-workspace/types";
 import { DEFAULT_ANALYSIS_PARAMS, DEFAULT_IMAGE_PARAMS, MASK_LAYER_ID } from "./analysis-workspace/types";
 
@@ -76,7 +75,8 @@ export default function AnalysisWorkspace() {
   const [status, setStatus] = useState(
     "Ready. Upload one or more AFM images to begin."
   );
-  const [activeTab, setActiveTab] = useState<"upload" | "results" | "export">("upload");
+  const [activeTab, setActiveTab] = useState<WorkspaceStep>("upload");
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const [toolMode, setToolMode] = useState<"draw" | "erase">("draw");
   const [brushSize, setBrushSize] = useState(10);
   const [maskOverlayOpacity, setMaskOverlayOpacity] = useState(0.6);
@@ -91,7 +91,9 @@ export default function AnalysisWorkspace() {
   const [strokeCount, setStrokeCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  // Which PDF is being built, so only that button shows "Exporting...".
+  const [exportTarget, setExportTarget] = useState<"current" | "batch" | null>(null);
+  const isExporting = exportTarget !== null;
   const [strokeHistoryMap, setStrokeHistoryMap] = useState<Record<string, MaskStroke[]>>({});
   const [editorHistoryMap, setEditorHistoryMap] = useState<Record<string, EditorSnapshot[]>>({});
   const [editorFutureMap, setEditorFutureMap] = useState<Record<string, EditorSnapshot[]>>({});
@@ -245,8 +247,6 @@ export default function AnalysisWorkspace() {
     [currentItem?.item_id, strokeHistoryMap]
   );
 
-  const currentStep =
-    activeTab === "export" ? 4 : Object.keys(analysisMap).length > 0 ? 3 : currentItem ? 2 : 1;
 
   const getCanvasContext = () => {
     const canvas = canvasRef.current;
@@ -478,7 +478,7 @@ export default function AnalysisWorkspace() {
   }, [currentItem?.item_id]);
 
   useEffect(() => {
-    if (activeTab !== "upload" || !currentItem?.item_id) return;
+    if (activeTab !== "review" || !currentItem?.item_id) return;
     const strokes = strokeHistoryMap[currentItem.item_id] || [];
     const sourceImage = maskBaseMap[currentItem.item_id] || currentItem.mask_image_url;
     if (!sourceImage) return;
@@ -493,7 +493,7 @@ export default function AnalysisWorkspace() {
     selectedLayerIdRef.current = selectedLayerId;
     flashLayerIdRef.current = flashLayerId;
 
-    if (activeTab !== "upload" || !currentItem?.item_id || !currentItem.mask_image_url) return;
+    if (activeTab !== "review" || !currentItem?.item_id || !currentItem.mask_image_url) return;
     const strokes = strokeHistoryMap[currentItem.item_id] || [];
     loadMaskToCanvas(maskBaseMap[currentItem.item_id] || currentItem.mask_image_url, strokes, undefined, false);
   }, [
@@ -989,7 +989,7 @@ export default function AnalysisWorkspace() {
           `Upload complete. ${data.batch_count} image${data.batch_count === 1 ? "" : "s"} loaded.`
         );
       }
-      setActiveTab("upload");
+      setActiveTab("review");
     } catch (error) {
       setStatus(`Cannot reach backend at ${BACKEND_URL}. Start backend server first.`);
       console.warn("Upload request failed", error);
@@ -1309,7 +1309,7 @@ export default function AnalysisWorkspace() {
       return;
     }
 
-    setIsExporting(true);
+    setExportTarget("current");
     setStatus("Building PDF for selected image...");
 
     try {
@@ -1341,7 +1341,7 @@ export default function AnalysisWorkspace() {
       console.warn("Single PDF export failed", error);
       setStatus("Failed to export selected PDF.");
     } finally {
-      setIsExporting(false);
+      setExportTarget(null);
     }
   };
 
@@ -1368,7 +1368,7 @@ export default function AnalysisWorkspace() {
       return;
     }
 
-    setIsExporting(true);
+    setExportTarget("batch");
     setStatus("Building batch PDF...");
 
     try {
@@ -1399,121 +1399,222 @@ export default function AnalysisWorkspace() {
       console.warn("Batch PDF export failed", error);
       setStatus("Failed to export batch PDF.");
     } finally {
-      setIsExporting(false);
+      setExportTarget(null);
     }
   };
 
   const badgeClass = (name?: string) => String(name || "unknown").toUpperCase();
 
+  // ---- Step navigation: one step at a time, later steps unlock as the job progresses.
+  const analyzedCount = Object.keys(analysisMap).length;
+  const batchCount = batchData?.items?.length ?? 0;
+  const activeIndex = WIZARD_STEPS.findIndex((step) => step.id === activeTab);
+  const activeStepInfo = WIZARD_STEPS[activeIndex];
+  const isBusy = isUploading || isRunning || isExporting;
+  const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+  const canOpenStep = (step: WorkspaceStep) => {
+    if (step === "upload") return true;
+    if (step === "review") return batchCount > 0;
+    return analyzedCount > 0;
+  };
+
+  // Furthest step reached in this job, so steps the user came back from show as done.
+  const [maxVisitedIndex, setMaxVisitedIndex] = useState(0);
+  if (activeIndex > maxVisitedIndex) setMaxVisitedIndex(activeIndex);
+  if (!batchData && maxVisitedIndex !== 0) setMaxVisitedIndex(0);
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [activeTab]);
+
+  const stepStateOf = (index: number): WizardTabState => {
+    if (index === activeIndex) return "active";
+    if (!canOpenStep(WIZARD_STEPS[index].id)) return "locked";
+    return index < activeIndex || index < maxVisitedIndex ? "done" : "ready";
+  };
+
+  const stepDetailOf = (step: WorkspaceStep, state: WizardTabState) => {
+    if (state === "locked") return step === "review" ? "After upload" : "After analysis";
+    if (step === "upload") return batchCount ? `${plural(batchCount, "image")} uploaded` : "Add AFM images";
+    if (step === "review") {
+      const counts: Record<string, number> = {};
+      (displayBatchData?.items || []).forEach((item) => {
+        counts[item.predicted_class] = (counts[item.predicted_class] || 0) + 1;
+      });
+      return Object.entries(counts)
+        .map(([name, count]) => `${count} ${name}`)
+        .join(" · ");
+    }
+    if (step === "results") return `${analyzedCount} of ${plural(batchCount, "image")} analyzed`;
+    return state === "done" ? "Visited" : "PDF and CSV";
+  };
+
+  const goToStep = (target: WorkspaceStep) => {
+    if (target === activeTab || !canOpenStep(target)) return;
+    if (activeTab === "review") saveCurrentCanvasForItem(currentItem?.item_id);
+    setActiveTab(target);
+  };
+
+  const primaryAction = () => {
+    if (activeTab === "upload") {
+      const disabled = !selectedFiles.length || isUploading;
+      return (
+        <button type="button" onClick={() => void handleUpload()} disabled={disabled} style={runButtonStyle}>
+          {isUploading ? "Detecting..." : "Upload & detect →"}
+        </button>
+      );
+    }
+    if (activeTab === "review") {
+      const disabled = isRunning || !batchCount;
+      return (
+        <button type="button" onClick={() => void handleRunAnalysis()} disabled={disabled} style={runButtonStyle}>
+          {isRunning ? "Analyzing..." : `Analyze ${plural(batchCount, "image")} →`}
+        </button>
+      );
+    }
+    if (activeTab === "results") {
+      return (
+        <button type="button" onClick={() => goToStep("export")} style={runButtonStyle}>
+          Next: Export →
+        </button>
+      );
+    }
+    return (
+      <button type="button" onClick={handleNewJob} style={runButtonStyle}>
+        ⟲ Start a new job
+      </button>
+    );
+  };
+
   return (
     <>
       <GlobalWorkspaceStyles />
+      <WizardStyles />
 
-      <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
-        <WorkspaceHeader
-          handleNewJob={handleNewJob}
-          setThemeMode={setThemeMode}
+      <main className="wiz-root" style={{ background: "var(--bg)", color: "var(--text)" }}>
+        <WizardSidebar
+          activeStep={activeTab}
+          stateOf={stepStateOf}
+          detailOf={stepDetailOf}
+          onSelect={goToStep}
           themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          handleNewJob={handleNewJob}
         />
 
-        <WorkspaceStepper currentStep={currentStep} />
+        <section className="wiz-main">
+          <WizardHead
+            index={activeIndex}
+            total={WIZARD_STEPS.length}
+            title={activeStepInfo.title}
+            hint={activeStepInfo.hint}
+          />
 
-        <div style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 28px" }}>
-          <WorkspaceStageTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+          <div ref={bodyRef} className="wiz-body">
+            <div className="wiz-body-inner">
+              {activeTab === "upload" && (
+                <UploadStage
+                  hiddenFileInputRef={hiddenFileInputRef}
+                  isDragActive={isDragActive}
+                  setIsDragActive={setIsDragActive}
+                  setFilesFromInput={setFilesFromInput}
+                  selectedFiles={selectedFiles}
+                  selectedFilePreviewUrls={selectedFilePreviewUrls}
+                  setSelectedFiles={setSelectedFiles}
+                  batchData={displayBatchData}
+                />
+              )}
 
-          {activeTab === "upload" && (
-            <UploadStage
-              hiddenFileInputRef={hiddenFileInputRef}
-              isDragActive={isDragActive}
-              setIsDragActive={setIsDragActive}
-              setFilesFromInput={setFilesFromInput}
-              selectedFiles={selectedFiles}
-              selectedFilePreviewUrls={selectedFilePreviewUrls}
-              setSelectedFiles={setSelectedFiles}
-              handleUpload={() => void handleUpload()}
-              isUploading={isUploading}
-              batchData={displayBatchData}
-              analysisMap={analysisMap}
-              editedMaskMap={editedMaskMap}
-              currentItem={currentItem}
-              classifierClass={classifierClass}
-              onClassificationOverride={handleClassificationChange}
-              isResegmenting={!!(currentItem && resegmentingIds[currentItem.item_id])}
-              saveCurrentCanvasForItem={saveCurrentCanvasForItem}
-              setSelectedItemId={setSelectedItemId}
-              setActiveTab={setActiveTab}
-              badgeClass={badgeClass}
-              showAdvancedImageOptions={showAdvancedImageOptions}
-              setShowAdvancedImageOptions={setShowAdvancedImageOptions}
-              imageParams={currentImageParams}
-              onImageParamsChange={updateCurrentImageParams}
-              onApplyImageParamsToAll={applyImageParamsToAll}
-              maskMode={maskMode}
-              setMaskMode={setMaskMode}
-              toolMode={toolMode}
-              setToolMode={setToolMode}
-              resetMask={resetMask}
-              undoLastStroke={undoLastStroke}
-              redoLastStroke={redoLastStroke}
-              brushSize={brushSize}
-              setBrushSize={setBrushSize}
-              maskOverlayOpacity={maskOverlayOpacity}
-              setMaskOverlayOpacity={setMaskOverlayOpacity}
-              canvasRef={canvasRef}
-              startDrawing={startDrawing}
-              stopDrawing={stopDrawing}
-              draw={draw}
-              strokeCount={strokeCount}
-              selectedItemStrokes={selectedItemStrokes}
-              selectLayer={selectLayer}
-              flashLayerId={flashLayerId}
-              selectedLayerId={selectedLayerId}
-              removeStrokeById={removeStrokeById}
-              status={status}
-              handleRunAnalysis={() => void handleRunAnalysis()}
-              isRunning={isRunning}
-              maskLayerId={MASK_LAYER_ID}
-              canvasSize={CANVAS_SIZE}
-            />
-          )}
+              {activeTab === "review" && (
+                <ReviewStage
+                  batchData={displayBatchData}
+                  analysisMap={analysisMap}
+                  editedMaskMap={editedMaskMap}
+                  currentItem={currentItem}
+                  classifierClass={classifierClass}
+                  onClassificationOverride={handleClassificationChange}
+                  isResegmenting={!!(currentItem && resegmentingIds[currentItem.item_id])}
+                  saveCurrentCanvasForItem={saveCurrentCanvasForItem}
+                  setSelectedItemId={setSelectedItemId}
+                  badgeClass={badgeClass}
+                  showAdvancedImageOptions={showAdvancedImageOptions}
+                  setShowAdvancedImageOptions={setShowAdvancedImageOptions}
+                  imageParams={currentImageParams}
+                  onImageParamsChange={updateCurrentImageParams}
+                  onApplyImageParamsToAll={applyImageParamsToAll}
+                  maskMode={maskMode}
+                  setMaskMode={setMaskMode}
+                  toolMode={toolMode}
+                  setToolMode={setToolMode}
+                  resetMask={resetMask}
+                  undoLastStroke={undoLastStroke}
+                  redoLastStroke={redoLastStroke}
+                  brushSize={brushSize}
+                  setBrushSize={setBrushSize}
+                  maskOverlayOpacity={maskOverlayOpacity}
+                  setMaskOverlayOpacity={setMaskOverlayOpacity}
+                  canvasRef={canvasRef}
+                  startDrawing={startDrawing}
+                  stopDrawing={stopDrawing}
+                  draw={draw}
+                  strokeCount={strokeCount}
+                  selectedItemStrokes={selectedItemStrokes}
+                  selectLayer={selectLayer}
+                  flashLayerId={flashLayerId}
+                  selectedLayerId={selectedLayerId}
+                  removeStrokeById={removeStrokeById}
+                  maskLayerId={MASK_LAYER_ID}
+                  canvasSize={CANVAS_SIZE}
+                />
+              )}
 
-          {activeTab === "results" && (
-            <ResultsStage
-              batchData={displayBatchData}
-              currentItem={currentItem}
-              currentAnalysis={currentAnalysis}
-              analysisMap={analysisMap}
-              setSelectedItemId={setSelectedItemId}
-              badgeClass={badgeClass}
-              showAdvancedAnalysisOptions={showAdvancedAnalysisOptions}
-              setShowAdvancedAnalysisOptions={setShowAdvancedAnalysisOptions}
-              analysisParams={currentAnalysisParams}
-              onAnalysisParamsChange={updateCurrentAnalysisParams}
-              onRerunAnalysis={rerunCurrentAnalysis}
-              onApplyAnalysisParamsToAll={applyAnalysisParamsToAllAndRerun}
-              isRunning={isRunning}
-              isAnalysisStale={isCurrentAnalysisStale}
-              status={status}
-              outputSections={outputSections}
-              setViewerImage={setViewerImage}
-              importantMetrics={importantMetrics}
-            />
-          )}
+              {activeTab === "results" && (
+                <ResultsStage
+                  batchData={displayBatchData}
+                  currentItem={currentItem}
+                  currentAnalysis={currentAnalysis}
+                  analysisMap={analysisMap}
+                  setSelectedItemId={setSelectedItemId}
+                  badgeClass={badgeClass}
+                  showAdvancedAnalysisOptions={showAdvancedAnalysisOptions}
+                  setShowAdvancedAnalysisOptions={setShowAdvancedAnalysisOptions}
+                  analysisParams={currentAnalysisParams}
+                  onAnalysisParamsChange={updateCurrentAnalysisParams}
+                  onRerunAnalysis={rerunCurrentAnalysis}
+                  onApplyAnalysisParamsToAll={applyAnalysisParamsToAllAndRerun}
+                  isRunning={isRunning}
+                  isAnalysisStale={isCurrentAnalysisStale}
+                  status={status}
+                  outputSections={outputSections}
+                  setViewerImage={setViewerImage}
+                  importantMetrics={importantMetrics}
+                />
+              )}
 
-          {activeTab === "export" && (
-            <ExportStage
-              handleNewJob={handleNewJob}
-              handleExportCurrentPdf={() => void handleExportCurrentPdf()}
-              currentAnalysis={currentAnalysis}
-              isExporting={isExporting}
-              handleExportBatchPdf={() => void handleExportBatchPdf()}
-              handleExportCsv={handleExportCsv}
-              analysisMap={analysisMap}
-            />
-          )}
-        </div>
+              {activeTab === "export" && (
+                <ExportStage
+                  currentItem={currentItem}
+                  handleExportCurrentPdf={() => void handleExportCurrentPdf()}
+                  currentAnalysis={currentAnalysis}
+                  exportTarget={exportTarget}
+                  handleExportBatchPdf={() => void handleExportBatchPdf()}
+                  handleExportCsv={handleExportCsv}
+                  analysisMap={analysisMap}
+                />
+              )}
+            </div>
+          </div>
 
-        <WorkspaceFooter />
+          <WizardBar
+            onBack={() => activeIndex > 0 && goToStep(WIZARD_STEPS[activeIndex - 1].id)}
+            backDisabled={activeIndex === 0}
+            status={status}
+            isBusy={isBusy}
+          >
+            {primaryAction()}
+          </WizardBar>
+        </section>
 
         <ImageViewerModal viewerImage={viewerImage} onClose={() => setViewerImage(null)} />
       </main>

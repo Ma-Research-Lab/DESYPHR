@@ -340,3 +340,84 @@ body {
 :root[data-theme="retro"] .ws-footer a {
   color: var(--px-gold-light) !important;
 }
+
+/* Wizard layout: sky step menu, cream step header and action bar with
+   brick and ink edges, coin step markers. */
+:root[data-theme="retro"] .wiz-side {
+  border-bottom: none;
+  border-right: 4px solid var(--px-ink);
+}
+
+:root[data-theme="retro"] .wiz-tab {
+  border: 3px solid transparent !important;
+  font-family: var(--font-pixel);
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .wiz-tab[aria-current="step"] {
+  background: linear-gradient(90deg, var(--px-green-light) 0 12%, var(--px-green) 12% 75%, var(--px-green-dark) 75%) !important;
+  border-color: var(--px-ink) !important;
+}
+
+:root[data-theme="retro"] .wiz-tab-title {
+  font-size: 10px !important;
+  font-weight: normal !important;
+  text-transform: uppercase;
+}
+
+:root[data-theme="retro"] .wiz-tab-detail {
+  font-family: inherit;
+  font-size: 7px !important;
+  line-height: 1.6;
+  color: var(--px-gold-light) !important;
+}
+
+:root[data-theme="retro"] .wiz-copy {
+  font-family: var(--font-pixel);
+  font-size: 7px !important;
+  line-height: 1.8;
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .wiz-head {
+  background: var(--px-brick-tile) !important;
+  background-size: 32px 32px !important;
+  border-bottom: 4px solid var(--px-ink) !important;
+}
+
+:root[data-theme="retro"] .wiz-head-count,
+:root[data-theme="retro"] .wiz-head-title,
+:root[data-theme="retro"] .wiz-head-hint {
+  color: #fff !important;
+  font-family: var(--font-pixel);
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .wiz-head-count {
+  font-size: 8px !important;
+  color: var(--px-gold-light) !important;
+}
+
+:root[data-theme="retro"] .wiz-head-title {
+  font-size: 16px !important;
+  font-weight: normal !important;
+  margin-top: 8px !important;
+  text-transform: uppercase;
+}
+
+:root[data-theme="retro"] .wiz-head-hint {
+  font-size: 8px !important;
+  line-height: 1.8;
+  margin-top: 8px !important;
+}
+
+:root[data-theme="retro"] .wiz-bar {
+  background: var(--surface) !important;
+  border-top: 4px solid var(--px-ink) !important;
+}
+
+:root[data-theme="retro"] .wiz-status {
+  font-family: var(--font-pixel);
+  font-size: 8px !important;
+  color: var(--px-ink) !important;
+}

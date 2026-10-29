@@ -396,11 +396,15 @@ def run_colorwheel(
     # Show each orientation mask as analysed, on a white background:
     # microdomains filtered out for grain analysis (and excluded dot areas)
     # are left out of the image. Features keep their phase colour; white or
-    # black ones are drawn black so they stay visible.
+    # black ones are drawn black so they stay visible. The all-domains mask is
+    # just the segmentation mask with no microdomains, so it is not shown.
     analysis_masks = grains.get('analysis_masks') or {}
+    domain_index = grains.get('domain_mask_index')
     one_phase_array = np.array(one_phase.convert('RGB'))
     mask_images = []
     for idx, mask in enumerate(orientation_masks):
+        if idx == domain_index:
+            continue
         shown = np.asarray(analysis_masks.get(idx, mask), dtype=bool)
         rendered = np.full_like(one_phase_array, 255)
         colours = one_phase_array[shown]
