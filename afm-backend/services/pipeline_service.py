@@ -396,7 +396,7 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
     extra1_url = extra2_url = extra3_url = extra4_url = ""
     extra1_note = extra2_note = extra3_note = extra4_note = ""
     summary_parts: list[str] = []
-    detail_lines = [f"CNN predicted class: {predicted_class}"]
+    detail_lines = [f"CNN predicted class: {predicted_class.capitalize()}"]
     metrics: list[dict] = []
     additional_outputs: list[dict] = []
     domain_spacing = None
@@ -597,10 +597,10 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
             extra2_note = "Spacing Histogram"
             extra3_note = "Skeleton Overlay"
             metrics.extend(parse_numeric_metrics(domain_spacing))
-            summary_parts.append("Dan Spacing")
-            detail_lines.append("Dan binarization and spacing analysis complete")
+            summary_parts.append("Interfeature Spacing")
+            detail_lines.append("Binarization and interfeature spacing analysis complete")
         else:
-            detail_lines.append(f"Dan spacing error: {spacing.get('error', 'Unknown error')}")
+            detail_lines.append(f"Interfeature spacing error: {spacing.get('error', 'Unknown error')}")
 
     seen = set()
     unique_metrics = []
@@ -635,7 +635,7 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
                 )
         unique_metrics = _report_metrics(saved_path, image_size_um, spacing_nm, grain_area_um2, grain_area_std_um2)
 
-    summary = f"{predicted_class.upper()} class"
+    summary = f"{predicted_class.capitalize()} class"
     if summary_parts:
         summary += " · " + " + ".join(summary_parts)
 

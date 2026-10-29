@@ -1371,7 +1371,9 @@ export function ResultsStage({
 }
 
 export function ExportStage({
+  batchData,
   currentItem,
+  setSelectedItemId,
   handleExportCurrentPdf,
   currentAnalysis,
   exportTarget,
@@ -1379,7 +1381,9 @@ export function ExportStage({
   handleExportCsv,
   analysisMap,
 }: {
+  batchData: UploadBatchResponse | null;
   currentItem: UploadItem | null;
+  setSelectedItemId: Dispatch<SetStateAction<string>>;
   handleExportCurrentPdf: () => void;
   currentAnalysis: AnalysisResponse | null;
   exportTarget: "current" | "batch" | null;
@@ -1389,10 +1393,95 @@ export function ExportStage({
 }) {
   const analyzedCount = Object.keys(analysisMap).length;
   const isExporting = exportTarget !== null;
+
+  // Step through the analyzed images here instead of going back to Results.
+  const analyzedItems = (batchData?.items || []).filter((item) => analysisMap[item.item_id]);
+  const pickerIndex = analyzedItems.findIndex((item) => item.item_id === currentItem?.item_id);
+  const stepImage = (delta: number) => {
+    if (!analyzedItems.length) return;
+    const from = pickerIndex < 0 ? (delta > 0 ? -1 : 0) : pickerIndex;
+    const next = (from + delta + analyzedItems.length) % analyzedItems.length;
+    setSelectedItemId(analyzedItems[next].item_id);
+  };
+  const stepButtonStyle = { ...secondaryButtonStyle, padding: "8px 12px", flexShrink: 0 };
+  const imagePicker = analyzedItems.length ? (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          type="button"
+          onClick={() => stepImage(-1)}
+          disabled={analyzedItems.length < 2 || isExporting}
+          aria-label="Previous image"
+          style={stepButtonStyle}
+        >
+          ‹
+        </button>
+        <select
+          aria-label="Image to export"
+          value={pickerIndex < 0 ? "" : currentItem?.item_id}
+          disabled={isExporting}
+          onChange={(e) => setSelectedItemId(e.target.value)}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: "8px 10px",
+            borderRadius: 5,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            color: "var(--text)",
+          }}
+        >
+          {pickerIndex < 0 ? <option value="">Choose an image</option> : null}
+          {analyzedItems.map((item) => (
+            <option key={item.item_id} value={item.item_id}>
+              {item.item_index}. {item.original_filename}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => stepImage(1)}
+          disabled={analyzedItems.length < 2 || isExporting}
+          aria-label="Next image"
+          style={stepButtonStyle}
+        >
+          ›
+        </button>
+      </div>
+      {pickerIndex >= 0 && currentItem ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 4,
+              border: "1px solid var(--border)",
+              overflow: "hidden",
+              background: "var(--imageBg)",
+              flexShrink: 0,
+            }}
+          >
+            {currentItem.original_image_url?.trim() ? (
+              <img
+                src={currentItem.original_image_url}
+                alt={currentItem.original_filename}
+                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            ) : null}
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--muted)", minWidth: 0 }}>
+            Image {pickerIndex + 1} of {analyzedItems.length} · {String(currentItem.predicted_class).toUpperCase()}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  ) : null;
+
   const cards = [
     {
       title: "Selected image",
       detail: `${currentItem?.original_filename || "No image selected"} as a single PDF report.`,
+      picker: imagePicker,
       label: exportTarget === "current" ? "Exporting..." : "⭳ Download PDF",
       onClick: handleExportCurrentPdf,
       disabled: !currentAnalysis || isExporting,
@@ -1400,6 +1489,7 @@ export function ExportStage({
     {
       title: "Whole batch",
       detail: `All ${analyzedCount} analyzed image${analyzedCount === 1 ? "" : "s"} combined into one PDF.`,
+      picker: null,
       label: exportTarget === "batch" ? "Exporting..." : "⭳ Download batch PDF",
       onClick: handleExportBatchPdf,
       disabled: !analyzedCount || isExporting,
@@ -1407,6 +1497,7 @@ export function ExportStage({
     {
       title: "Results table",
       detail: "Key metrics for every analyzed image as a CSV file.",
+      picker: null,
       label: "⭳ Download CSV",
       onClick: handleExportCsv,
       disabled: !analyzedCount,
@@ -1414,10 +1505,18 @@ export function ExportStage({
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 16 }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))",
+        gap: 16,
+        alignItems: "start",
+      }}
+    >
       {cards.map((card) => (
         <Panel key={card.title} title={card.title}>
           <div style={{ display: "grid", gap: 16 }}>
+            {card.picker}
             <div style={{ color: "var(--muted)", fontSize: "0.76rem", lineHeight: 1.6, overflowWrap: "anywhere" }}>
               {card.detail}
             </div>

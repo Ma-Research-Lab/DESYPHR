@@ -1,4 +1,5 @@
 import io
+from itertools import zip_longest
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
@@ -7,7 +8,7 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from utils import decode_data_url_to_pil, fit_image_size, wrap_text
 
 
-def draw_result_block(pdf, x, y, width, title, data_url, caption="", max_height=210):
+def draw_result_block(pdf, x, y, width, title, data_url, caption="", max_height=210, center=False):
     pil_img = decode_data_url_to_pil(data_url)
     if pil_img is None:
         pdf.setFont("Helvetica-Bold", 11)
@@ -16,12 +17,14 @@ def draw_result_block(pdf, x, y, width, title, data_url, caption="", max_height=
         pdf.drawString(x, y - 14, "No image available")
         return y - 40
 
+    img_w, img_h = pil_img.size
+    draw_w, draw_h = fit_image_size(img_w, img_h, width, max_height)
+    if center:
+        x += (width - draw_w) / 2
+
     pdf.setFont("Helvetica-Bold", 11)
     pdf.drawString(x, y, title)
     y -= 14
-
-    img_w, img_h = pil_img.size
-    draw_w, draw_h = fit_image_size(img_w, img_h, width, max_height)
 
     reader = ImageReader(pil_img)
     pdf.drawImage(
@@ -94,6 +97,47 @@ PDF_OUTPUTS_BY_CLASS = {
     "mixed": ("Voronoi Overlay", "Grain Map"),
 }
 
+LEFT_COLUMN_OUTPUTS = ("Original", "Final Mask")
+COLUMN_GAP = 18
+
+
+def draw_output_columns(pdf, blocks, y, margin, usable_w, page_h, reserve=0):
+    """Draw outputs two to a row: Original and Final Mask down the left column,
+    the analysis outputs down the right; any further outputs follow in pairs.
+
+    Images are sized so the first two rows still leave `reserve` points
+    (the metrics) on the page. Returns the new y.
+    """
+    blocks = [b for b in blocks if b[1] and str(b[1]).startswith("data:")]
+    if not blocks:
+        return y
+    left = [b for b in blocks if b[0] in LEFT_COLUMN_OUTPUTS]
+    right = [b for b in blocks if b[0] not in LEFT_COLUMN_OUTPUTS]
+    rows = [[l, r] for l, r in zip_longest(left, right[: len(left)])]
+    rest = right[len(left):]
+    rows += [rest[i:i + 2] for i in range(0, len(rest), 2)]
+
+    col_w = (usable_w - COLUMN_GAP) / 2
+    lead_rows = min(len(rows), 2)
+    img_h = (y - margin - reserve) / lead_rows - 38
+    img_h = max(140, min(col_w, img_h))
+    row_h = img_h + 38
+
+    for row in rows:
+        if y - row_h < margin:
+            pdf.showPage()
+            y = page_h - margin
+        next_y = y
+        for col, block in enumerate(row):
+            if block is None:
+                continue
+            title, src, _caption = block
+            x = margin + col * (col_w + COLUMN_GAP)
+            cell_y = draw_result_block(pdf, x, y, col_w, title, src, max_height=img_h, center=True)
+            next_y = min(next_y, cell_y)
+        y = next_y
+    return y
+
 
 def build_single_result_pdf_bytes(batch_data: dict, current_item: dict, current_analysis: dict) -> bytes:
     buffer = io.BytesIO()
@@ -123,14 +167,10 @@ def build_single_result_pdf_bytes(batch_data: dict, current_item: dict, current_
     pdf.setFont("Helvetica", 10)
     meta_lines = [
         f"Job ID: {batch_data.get('job_id', '-')}",
-        f"Job Directory: {batch_data.get('job_dir', '-')}",
-        f"Item ID: {current_item.get('item_id', '-')}",
         f"Filename: {current_analysis.get('original_filename', current_item.get('original_filename', '-'))}",
         f"Summary: {current_analysis.get('summary', '-')}",
-        f"Predicted Class: {current_analysis.get('predicted_class', current_item.get('predicted_class', '-'))}",
+        f"Predicted Class: {str(current_analysis.get('predicted_class', current_item.get('predicted_class', '-'))).capitalize()}",
         f"Confidence: {float(current_analysis.get('confidence', current_item.get('confidence', 0.0))) * 100:.1f}%",
-        f"CNN Model: {current_analysis.get('cnn_model_name', current_item.get('cnn_model_name', '-'))}",
-        f"U-Net Model: {current_analysis.get('unet_model_name', current_item.get('unet_model_name', '-'))}",
     ]
     for line in meta_lines:
         pdf.drawString(margin, y, line[:130])
@@ -138,17 +178,16 @@ def build_single_result_pdf_bytes(batch_data: dict, current_item: dict, current_
 
     y -= 8
 
-    image_blocks = collect_output_blocks(current_analysis, current_item)
-
-    for title, src, caption in image_blocks:
-        if not src or not str(src).startswith("data:"):
-            continue
-        ensure_space(260)
-        y = draw_result_block(pdf, margin, y, usable_w, title, src, caption, max_height=230)
-
     metrics = current_analysis.get("metrics", [])
+    details = current_analysis.get("details", "")
+    detail_lines = wrap_text(details, 115) if details else []
+    # Leave room for metrics and details so the report fits on one page.
+    reserve = (30 + 14 * len(metrics) if metrics else 0) + (30 + 11 * len(detail_lines) if detail_lines else 0)
+    image_blocks = collect_output_blocks(current_analysis, current_item)
+    y = draw_output_columns(pdf, image_blocks, y, margin, usable_w, page_h, reserve=reserve)
+
     if metrics:
-        ensure_space(60 + 16 * len(metrics))
+        ensure_space(30 + 14 * len(metrics))
         pdf.setFont("Helvetica-Bold", 13)
         pdf.drawString(margin, y, "Metrics")
         y -= 18
@@ -160,9 +199,8 @@ def build_single_result_pdf_bytes(batch_data: dict, current_item: dict, current_
             pdf.drawString(margin + 230, y, str(metric.get("value", ""))[:45])
             y -= 14
 
-    details = current_analysis.get("details", "")
-    if details:
-        detail_lines = wrap_text(details, 115)
+    if detail_lines:
+        y -= 10
         ensure_space(40)
         pdf.setFont("Helvetica-Bold", 13)
         pdf.drawString(margin, y, "Details")
@@ -209,9 +247,8 @@ def build_batch_pdf_bytes(batch_data: dict, items: list, analysis_results: list)
         meta_lines = [
             f"Job ID: {batch_data.get('job_id', '-')}",
             f"Item {item.get('item_index', '-')}: {item.get('original_filename', '-')}",
-            f"Item ID: {item.get('item_id', '-')}",
             f"Summary: {(result or {}).get('summary', '-')}",
-            f"Predicted Class: {(result or item).get('predicted_class', '-')}",
+            f"Predicted Class: {str((result or item).get('predicted_class', '-')).capitalize()}",
             f"Confidence: {float((result or item).get('confidence', 0.0)) * 100:.1f}%",
         ]
         for line in meta_lines:
@@ -221,19 +258,18 @@ def build_batch_pdf_bytes(batch_data: dict, items: list, analysis_results: list)
         y -= 10
 
         if result:
-            image_blocks = collect_output_blocks(result, item)
-
-            for title, src, caption in image_blocks:
-                if not src or not str(src).startswith("data:"):
-                    continue
-                if y < 280:
-                    pdf.showPage()
-                    y = page_h - margin
-                y = draw_result_block(pdf, margin, y, usable_w, title, src, caption, max_height=180)
-
             metrics = result.get("metrics", [])
+            details = result.get("details", "")
+            detail_lines = wrap_text(details, 130)[:12] if details else []
+            # Leave room for metrics and details so each item fits on one page.
+            reserve = (26 + 12 * len(metrics[:12]) if metrics else 0) + (
+                26 + 10 * len(detail_lines) if detail_lines else 0
+            )
+            image_blocks = collect_output_blocks(result, item)
+            y = draw_output_columns(pdf, image_blocks, y, margin, usable_w, page_h, reserve=reserve)
+
             if metrics:
-                if y < 140:
+                if y < margin + 26 + 12 * len(metrics[:12]):
                     pdf.showPage()
                     y = page_h - margin
                 pdf.setFont("Helvetica-Bold", 12)
@@ -249,16 +285,16 @@ def build_batch_pdf_bytes(batch_data: dict, items: list, analysis_results: list)
                     pdf.drawString(margin + 220, y, str(metric.get("value", ""))[:45])
                     y -= 12
 
-            details = result.get("details", "")
-            if details:
-                if y < 120:
+            if detail_lines:
+                y -= 10
+                if y < margin + 26 + 10 * len(detail_lines):
                     pdf.showPage()
                     y = page_h - margin
                 pdf.setFont("Helvetica-Bold", 12)
                 pdf.drawString(margin, y, "Details")
                 y -= 16
                 pdf.setFont("Helvetica", 8)
-                for line in wrap_text(details, 130)[:12]:
+                for line in detail_lines:
                     if y < margin + 14:
                         pdf.showPage()
                         y = page_h - margin

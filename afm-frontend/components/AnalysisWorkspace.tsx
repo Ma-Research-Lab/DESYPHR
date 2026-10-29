@@ -1594,7 +1594,9 @@ export default function AnalysisWorkspace() {
 
               {activeTab === "export" && (
                 <ExportStage
+                  batchData={displayBatchData}
                   currentItem={currentItem}
+                  setSelectedItemId={setSelectedItemId}
                   handleExportCurrentPdf={() => void handleExportCurrentPdf()}
                   currentAnalysis={currentAnalysis}
                   exportTarget={exportTarget}
