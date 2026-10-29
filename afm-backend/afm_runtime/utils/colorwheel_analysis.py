@@ -277,7 +277,8 @@ def analyze_line_grains(orientation_masks, final_mask, image_size_um, spacing_nm
         exclude = cv2.dilate(np.asarray(exclude_mask, dtype=np.uint8), kernel) > 0
 
     rng = np.random.default_rng(seed)
-    grain_map = np.zeros((h, w, 3), dtype=np.uint8)
+    # White background; grain colours are capped below white so every grain shows.
+    grain_map = np.full((h, w, 3), 255, dtype=np.uint8)
     phase_areas = []
     for idx, mask in enumerate(orientation_masks):
         if idx == domain_index:
@@ -301,7 +302,7 @@ def analyze_line_grains(orientation_masks, final_mask, image_size_um, spacing_nm
             if area_px == 0:
                 continue
             phase_areas.append(area_px)
-            grain_map[grain_pixels] = rng.integers(40, 256, size=3, dtype=np.uint8)
+            grain_map[grain_pixels] = rng.integers(0, 210, size=3, dtype=np.uint8)
 
     result['grain_count'] = len(phase_areas)
     result['grain_map_base64'] = _pil_to_base64(Image.fromarray(grain_map))
@@ -321,14 +322,6 @@ def _pil_to_base64(pil_img):
     buf = io.BytesIO()
     pil_img.save(buf, format='PNG')
     return f"data:image/png;base64,{base64.b64encode(buf.getvalue()).decode()}"
-
-
-def _file_to_base64(path):
-    if not os.path.exists(path):
-        return None
-    with open(path, 'rb') as f:
-        data = f.read()
-    return f"data:image/png;base64,{base64.b64encode(data).decode()}"
 
 
 def run_colorwheel(
@@ -390,14 +383,6 @@ def run_colorwheel(
         mask_maker = ColorMaskProcessor(one_phase, tmpdir)
         orientation_masks = mask_maker.process_image(num_clusters=num_clusters)
 
-        # Collect mask images as base64
-        mask_images = []
-        for i in range(num_clusters):
-            fpath = os.path.join(tmpdir, f"filtered_mask_{i}.png")
-            b64 = _file_to_base64(fpath)
-            if b64:
-                mask_images.append(b64)
-
     grains = {}
     try:
         spacing_nm = (domain_spacing or {}).get('spacing_nm') if (domain_spacing or {}).get('success', True) else None
@@ -408,17 +393,21 @@ def run_colorwheel(
     except Exception as e:
         grains = {'error': str(e)}
 
-    # Show each orientation mask as analysed: microdomains filtered out for
-    # grain analysis (and excluded dot areas) are left out of the image.
+    # Show each orientation mask as analysed, on a white background:
+    # microdomains filtered out for grain analysis (and excluded dot areas)
+    # are left out of the image. Features keep their phase colour; white or
+    # black ones are drawn black so they stay visible.
     analysis_masks = grains.get('analysis_masks') or {}
-    if analysis_masks:
-        one_phase_array = np.array(one_phase)
-        mask_images = []
-        for idx, mask in enumerate(orientation_masks):
-            shown = analysis_masks.get(idx, mask)
-            rendered = np.zeros_like(one_phase_array)
-            rendered[shown] = one_phase_array[shown]
-            mask_images.append(_pil_to_base64(Image.fromarray(rendered)))
+    one_phase_array = np.array(one_phase.convert('RGB'))
+    mask_images = []
+    for idx, mask in enumerate(orientation_masks):
+        shown = np.asarray(analysis_masks.get(idx, mask), dtype=bool)
+        rendered = np.full_like(one_phase_array, 255)
+        colours = one_phase_array[shown]
+        colourless = (colours.max(axis=1) - colours.min(axis=1)) < 30
+        colours[colourless] = 0
+        rendered[shown] = colours
+        mask_images.append(_pil_to_base64(Image.fromarray(rendered)))
 
     return {
         'success': True,

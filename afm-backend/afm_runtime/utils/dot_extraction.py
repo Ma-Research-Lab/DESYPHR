@@ -39,7 +39,7 @@ def extract_dots(
     Returns
     -------
     dict with keys:
-        dots_mask : np.ndarray  — uint8 mask with only dot centroids (5×5 blobs)
+        dots_mask : np.ndarray  — uint8 mask with only dot centroids (3×3 blobs)
         dots_region_mask : np.ndarray — uint8 mask with the full kept dot components
         total_components : int
         kept_dots : int
@@ -84,8 +84,8 @@ def extract_dots(
 
         if min_area <= area <= max_area and round_enough:
             cy, cx = map(int, prop.centroid)
-            y1, y2 = max(cy - 2, 0), min(cy + 3, output.shape[0])
-            x1, x2 = max(cx - 2, 0), min(cx + 3, output.shape[1])
+            y1, y2 = max(cy - 1, 0), min(cy + 2, output.shape[0])
+            x1, x2 = max(cx - 1, 0), min(cx + 2, output.shape[1])
             output[y1:y2, x1:x2] = 255
             region_output[labels_img == prop.label] = 255
             kept += 1

@@ -713,7 +713,8 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
 
     # Image: grayscale version of the original AFM image
     if save_image == True:
-        plt.imshow(image_data, cmap='Greys')
+        # dots black on a white background (the dot phase is 0 here)
+        plt.imshow(image_data, cmap='gray', vmin=0, vmax=1)
         plt.axis('off')
         cur_axes = plt.gca()
         cur_axes.axes.get_xaxis().set_visible(False)
@@ -904,8 +905,14 @@ def analyze_image(image_data, image_name, image_size, save_image=True, show_imag
         # plt.imshow(lines_light * 0.1 + dots_light * 0.3, cmap='CMRmap_r', interpolation='nearest', origin='lower')
         # plt.imshow(skel_tidy_light, cmap='Greys', alpha=0.2, origin='lower')
 
-        binarized_inverted = 1 - binarized
-        plt.imshow(binarized, cmap='gray')
+        # Always draw dots black on a white background. The binarized
+        # polarity depends on which branch ran above, so read the dot phase
+        # from the binarized value at the dot centres.
+        dot_rows = np.clip(dot_coords[:, 0].astype(int), 0, binarized.shape[0] - 1)
+        dot_cols = np.clip(dot_coords[:, 1].astype(int), 0, binarized.shape[1] - 1)
+        dot_phase = 1 if np.mean(binarized[dot_rows, dot_cols]) >= 0.5 else 0
+        display_bin = (binarized != dot_phase).astype(float)  # dots 0 (black), background 1 (white)
+        plt.imshow(display_bin, cmap='gray', vmin=0, vmax=1)
         # Compute Voronoi diagram for light dots
         vor = spatial.Voronoi(dot_coords_transformed)
 

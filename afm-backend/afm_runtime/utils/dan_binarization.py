@@ -128,10 +128,21 @@ def analyze_spacing(binary_array, image_size_um=2.0, invert=False):
     binary_img = binary_array.copy()
     pixel_size_nm = (image_size_um / binary_img.shape[0]) * 1000
 
-    # Ensure minority phase is black (features)
-    count_black = np.sum(binary_img == 0)
-    count_white = np.size(binary_img) - count_black
-    if count_white < count_black:
+    # Make the feature phase black. Features are separate islands in a
+    # connected background, so a phase that splits into clearly more pieces
+    # is the feature phase; otherwise fall back to the minority phase. (On a
+    # ~50/50 image the minority rule alone can pick the connected background,
+    # which has no cell boundaries and gives no spacing values.)
+    black = binary_img == 0
+    _, n_black = scipy_label(black)
+    _, n_white = scipy_label(~black)
+    if n_black >= 2 * max(n_white, 1):
+        features_black = True
+    elif n_white >= 2 * max(n_black, 1):
+        features_black = False
+    else:
+        features_black = np.sum(black) <= np.sum(~black)
+    if not features_black:
         binary_img = 255 - binary_img
     if invert:
         binary_img = 255 - binary_img
@@ -197,11 +208,13 @@ def analyze_spacing(binary_array, image_size_um=2.0, invert=False):
     # Generate skeleton overlay
     h, w = binary_img.shape[:2]
     fig_skel, ax2 = plt.subplots(figsize=(6, 6), dpi=150)
-    ax2.imshow(binary_img, cmap='gray', vmin=0, vmax=255)
+    ax2.imshow(binary_img, cmap='gray', vmin=0, vmax=255, interpolation='nearest')
+    # Bold pink/purple cell lines: the 1 px skeleton is thickened for display only.
+    cell_lines = cv2.dilate(skeleton_mask.astype(np.uint8), np.ones((2, 2), np.uint8)) > 0
     overlay = np.zeros((h, w, 4), dtype=float)
-    overlay[..., :3] = (1.0, 213 / 255., 73 / 255.)
-    overlay[skeleton_mask, 3] = 1.0
-    ax2.imshow(overlay)
+    overlay[..., :3] = (209 / 255., 31 / 255., 182 / 255.)  # #D11FB6
+    overlay[cell_lines, 3] = 1.0
+    ax2.imshow(overlay, interpolation='nearest')
     ax2.set_title('Voronoi Skeleton Overlay')
     ax2.axis('off')
     fig_skel.tight_layout()

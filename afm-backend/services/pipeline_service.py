@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -331,6 +332,27 @@ def _mixed_grain_area_std(dot_area_um2, dot_areas, line_area_um2, line_areas):
     return float(np.std(pooled)) if pooled else None
 
 
+DOT_LINE_MAP_BACKGROUND = (255, 255, 255)
+DOT_LINE_MAP_LINE = (128, 128, 128)
+DOT_LINE_MAP_DOT = (30, 90, 230)
+
+
+def _dot_line_map(feature_mask: np.ndarray, dots_region_mask: np.ndarray) -> Image.Image:
+    """Colour a mixed mask: line features grey, dot features blue, background white.
+
+    feature_mask holds every feature (dots and lines); dots_region_mask holds the
+    components dot extraction kept as dots. Dot extraction works on a slightly
+    opened mask, so the dot regions are grown back by a pixel within the features.
+    """
+    features = feature_mask > 127
+    dots = cv2.dilate((dots_region_mask > 0).astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool) & features
+    rgb = np.empty((*features.shape, 3), dtype=np.uint8)
+    rgb[:] = DOT_LINE_MAP_BACKGROUND
+    rgb[features & ~dots] = DOT_LINE_MAP_LINE
+    rgb[dots] = DOT_LINE_MAP_DOT
+    return Image.fromarray(rgb)
+
+
 def _report_metrics(saved_path: str, image_size_um: float, spacing_nm, grain_area_um2, grain_area_std_um2=None) -> list[dict]:
     """The reduced metric set reported for dots, lines and mixed images."""
     metrics = []
@@ -424,13 +446,19 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
             }
             dots_filename = "dots_only_mask.png" if predicted_class == "dots" else "mixed_dots_only.png"
             dots_path = item_dir / dots_filename
-            Image.fromarray(voronoi_input).save(dots_path)
+            # Saved for display as black dots on white; voronoi_input itself is unchanged.
+            Image.fromarray(255 - voronoi_input).save(dots_path)
             dots_mask_url = image_path_to_data_url(str(dots_path))
             dot_extraction = {
                 **dot_stats,
                 "dots_mask_url": dots_mask_url,
             }
             _append_data_output(additional_outputs, "Dots Only Mask", dots_mask_url)
+            if predicted_class == "mixed" and dots_region_mask is not None:
+                # 255 - mask_array is the feature phase dot extraction ran on.
+                map_path = item_dir / "mixed_dot_line_map.png"
+                _dot_line_map(255 - mask_array, dots_region_mask).save(map_path)
+                _append_data_output(additional_outputs, "Dot & Line Map", image_path_to_data_url(str(map_path)))
 
         voronoi = run_voronoi(
             voronoi_input,

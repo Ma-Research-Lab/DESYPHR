@@ -187,7 +187,7 @@ export function buildOutputSections(
     if (!output.src || dedup.has(key)) continue;
     dedup.add(key);
 
-    if (output.label === "Original" || output.label === "Final Mask") {
+    if (output.label === "Original" || output.label === "Final Mask" || output.label === "Dot & Line Map") {
       sections.core.items.push(output);
     } else if (/^Domain Spacing /i.test(output.label)) {
       sections.spacing.items.push(output);
