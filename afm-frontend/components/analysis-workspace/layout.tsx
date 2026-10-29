@@ -6,38 +6,51 @@ import type { ViewerImage } from "./types";
 export function GlobalWorkspaceStyles() {
   return (
     <style jsx global>{`
-      :root {
-        --bg: #0a0e17;
-        --surface: #111827;
-        --surface2: #1a2236;
-        --border: #1e2d45;
-        --accent: #00d4ff;
-        --accent2: #7c3aed;
-        --green: #00ff9d;
-        --yellow: #ffd60a;
-        --text: #f4f7fb;
-        --muted: #93a9c3;
-        --imageBg: #000;
-        --overlayGrid: rgba(0, 212, 255, 0.04);
-        --overlayAxis: rgba(0, 212, 255, 0.1);
-        --bodyScanline: rgba(0, 0, 0, 0.04);
+      /* Clean, light data-portal look: grey page, white bordered cards,
+         navy top bar, blue accent, sentence-case headings. */
+      :root,
+      :root[data-theme="light"] {
+        --bg: #f3f5f8;
+        --surface: #ffffff;
+        --surface2: #f7f9fb;
+        --border: #dbe1e8;
+        --accent: #1a5fb4;
+        --accent2: #154c91;
+        --accentTint: rgba(26, 95, 180, 0.08);
+        --accentTintStrong: rgba(26, 95, 180, 0.14);
+        --green: #2e7d32;
+        --yellow: #a15c00;
+        --text: #1f2a37;
+        --muted: #5b6878;
+        --imageBg: #0f1720;
+        --navBg: #1d2b3a;
+        --navText: #ffffff;
+        --navMuted: #b8c4d2;
+        --shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+        --overlayGrid: rgba(26, 95, 180, 0.05);
+        --overlayAxis: rgba(26, 95, 180, 0.12);
       }
 
-      :root[data-theme="light"] {
-        --bg: #f4f7fb;
-        --surface: #ffffff;
-        --surface2: #edf3fb;
-        --border: #c4d2e5;
-        --accent: #005fcc;
-        --accent2: #0087a8;
-        --green: #0a8f57;
-        --yellow: #9b6b00;
-        --text: #09111f;
-        --muted: #44566f;
-        --imageBg: #dfe8f3;
-        --overlayGrid: rgba(0, 95, 204, 0.06);
-        --overlayAxis: rgba(0, 95, 204, 0.12);
-        --bodyScanline: rgba(255, 255, 255, 0.02);
+      :root[data-theme="dark"] {
+        --bg: #111821;
+        --surface: #18212c;
+        --surface2: #1e2834;
+        --border: #2c3846;
+        --accent: #5b9bea;
+        --accent2: #3d7fd1;
+        --accentTint: rgba(91, 155, 234, 0.1);
+        --accentTintStrong: rgba(91, 155, 234, 0.18);
+        --green: #66bb6a;
+        --yellow: #f0b45a;
+        --text: #e6ebf1;
+        --muted: #9aa7b6;
+        --imageBg: #000000;
+        --navBg: #0b1118;
+        --navText: #ffffff;
+        --navMuted: #9aa7b6;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --overlayGrid: rgba(91, 155, 234, 0.05);
+        --overlayAxis: rgba(91, 155, 234, 0.12);
       }
 
       * {
@@ -49,24 +62,19 @@ export function GlobalWorkspaceStyles() {
         padding: 0;
         background: var(--bg);
         color: var(--text);
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-family: "Source Sans 3", "Source Sans Pro", Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
       }
 
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        pointer-events: none;
-        background: repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 2px,
-          rgba(0, 0, 0, 0.04) 2px,
-          var(--bodyScanline) 4px
-        );
+      /* Sentence case throughout, like a data portal; the components were
+         written for an all-caps, letter-spaced look. */
+      main * {
+        text-transform: none !important;
+        letter-spacing: normal !important;
       }
 
       button,
@@ -75,24 +83,32 @@ export function GlobalWorkspaceStyles() {
         font: inherit;
       }
 
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      select {
+        border-radius: 4px !important;
+      }
+
+      input[type="checkbox"] {
+        accent-color: var(--accent);
+      }
+
+      input[type="range"] {
+        accent-color: var(--accent) !important;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
       .file-list-scroll {
         scrollbar-width: thin;
-        scrollbar-color: rgba(0, 212, 255, 0.55) var(--surface2);
-      }
-
-      .file-list-scroll::-webkit-scrollbar {
-        width: 10px;
-      }
-
-      .file-list-scroll::-webkit-scrollbar-track {
-        background: var(--surface2);
-        border-left: 1px solid var(--border);
-      }
-
-      .file-list-scroll::-webkit-scrollbar-thumb {
-        background: linear-gradient(var(--accent), var(--accent2));
-        border-radius: 999px;
-        border: 2px solid var(--surface2);
+        scrollbar-color: var(--border) transparent;
       }
     `}</style>
   );
@@ -101,6 +117,7 @@ export function GlobalWorkspaceStyles() {
 export function WorkspaceFooter() {
   return (
     <footer
+      className="ws-footer"
       style={{
         maxWidth: 1280,
         margin: "0 auto",

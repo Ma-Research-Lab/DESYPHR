@@ -19,10 +19,9 @@ import {
 import {
   buildDisplayedOutputs,
   buildLineDiagnosticsOutputs,
-  buildMetricValueByKey,
   buildOutputSections,
+  buildResultsCsv,
   getImportantMetrics,
-  getIrregularMethod,
   getSelectedItemStrokes,
 } from "./analysis-workspace/output-helpers";
 import {
@@ -36,10 +35,11 @@ import {
   UploadStage,
 } from "./analysis-workspace/stages";
 import type {
+  AnalysisParams,
   AnalysisResponse,
   EditorSnapshot,
+  ImageParams,
   MaskStroke,
-  ModelListItem,
   OutputSection,
   ResultOutput,
   StrokePoint,
@@ -48,20 +48,20 @@ import type {
   UploadItem,
   ViewerImage,
 } from "./analysis-workspace/types";
-import { MASK_LAYER_ID } from "./analysis-workspace/types";
+import { DEFAULT_ANALYSIS_PARAMS, DEFAULT_IMAGE_PARAMS, MASK_LAYER_ID } from "./analysis-workspace/types";
 
 export default function AnalysisWorkspace() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
   const hiddenFileInputRef = useRef<HTMLInputElement | null>(null);
   const currentStrokeRef = useRef<MaskStroke | null>(null);
-  const segmentationUpdateKeyRef = useRef("");
-  const analysisUpdateKeyRef = useRef("");
+  const resegmentTimersRef = useRef<Record<string, number>>({});
+  const resegmentSeqRef = useRef<Record<string, number>>({});
   const selectedLayerIdRef = useRef(MASK_LAYER_ID);
   const flashLayerIdRef = useRef("");
 
   const [clientSessionId, setClientSessionId] = useState("");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedFilePreviewUrls, setSelectedFilePreviewUrls] = useState<string[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
@@ -81,40 +81,13 @@ export default function AnalysisWorkspace() {
   const [brushSize, setBrushSize] = useState(10);
   const [maskOverlayOpacity, setMaskOverlayOpacity] = useState(0.6);
   const [maskMode, setMaskMode] = useState<"use" | "edit">("edit");
-  const [imageSizeUm, setImageSizeUm] = useState(1.0);
-  const [threshold, setThreshold] = useState(0.5);
-  const [denoise, setDenoise] = useState(0);
-  const [sharpen, setSharpen] = useState(0);
-  const [morphology, setMorphology] = useState(0);
-  const [grayscale, setGrayscale] = useState(false);
-  const [invertPixels, setInvertPixels] = useState(false);
-  const [invertMask, setInvertMask] = useState(false);
+  const [imageParamsMap, setImageParamsMap] = useState<Record<string, ImageParams>>({});
+  const [resegmentingIds, setResegmentingIds] = useState<Record<string, boolean>>({});
   const [showAdvancedImageOptions, setShowAdvancedImageOptions] = useState(false);
-  const [colorwheelClusters, setColorwheelClusters] = useState(5);
-  const [showColorwheelDebug, setShowColorwheelDebug] = useState(false);
-  const [voronoiThresholdEdge, setVoronoiThresholdEdge] = useState(0.25);
-  const [voronoiMaxSize, setVoronoiMaxSize] = useState(1024);
-  const [voronoiPackingEdges, setVoronoiPackingEdges] = useState<4 | 6>(6);
-  const [voronoiExtractDots, setVoronoiExtractDots] = useState(true);
-  const [minCircularity, setMinCircularity] = useState(0.6);
-  const [maxAspectRatio, setMaxAspectRatio] = useState(1.8);
-  const [minArea, setMinArea] = useState(15);
-  const [maxArea, setMaxArea] = useState(1200);
+  const [analysisParamsMap, setAnalysisParamsMap] = useState<Record<string, AnalysisParams>>({});
+  // Settings each item's current result was computed with, to flag stale results.
+  const [analysisParamsUsedMap, setAnalysisParamsUsedMap] = useState<Record<string, AnalysisParams>>({});
   const [showAdvancedAnalysisOptions, setShowAdvancedAnalysisOptions] = useState(false);
-  const [irregularUseAdaptive, setIrregularUseAdaptive] = useState(true);
-  const [irregularUseNiblack, setIrregularUseNiblack] = useState(true);
-  const [irregularCombineMode, setIrregularCombineMode] = useState<"OR" | "AND" | "adaptive" | "niblack" | "weighted">("OR");
-  const [irregularAlpha, setIrregularAlpha] = useState(0.5);
-  const [irregularKValue, setIrregularKValue] = useState(0.1);
-  const [irregularNiblackWindow, setIrregularNiblackWindow] = useState(25);
-  const [irregularAdaptiveMethod, setIrregularAdaptiveMethod] = useState<"gaussian" | "mean">("gaussian");
-  const [irregularAdaptiveBlockSize, setIrregularAdaptiveBlockSize] = useState(11);
-  const [irregularCValue, setIrregularCValue] = useState(2);
-  const [irregularBlur, setIrregularBlur] = useState<"none" | "gaussian" | "median" | "bilateral">("none");
-  const [irregularBlurKsize, setIrregularBlurKsize] = useState(5);
-  const [irregularEqualize, setIrregularEqualize] = useState(false);
-  const [irregularClahe, setIrregularClahe] = useState(false);
-  const [irregularInvertSpacing, setIrregularInvertSpacing] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -125,31 +98,12 @@ export default function AnalysisWorkspace() {
   const [selectedLayerId, setSelectedLayerId] = useState<string>(MASK_LAYER_ID);
   const [flashLayerId, setFlashLayerId] = useState<string>("");
   const [viewerImage, setViewerImage] = useState<ViewerImage | null>(null);
-  const [models, setModels] = useState<ModelListItem[]>([]);
-  const [activeModel, setActiveModel] = useState<string>("");
-  const [isSwitchingModel, setIsSwitchingModel] = useState(false);
   const [classificationOverrides, setClassificationOverrides] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setClientSessionId(getOrCreateClientSessionId());
     setThemeMode(getInitialThemeMode());
   }, []);
-
-  const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/models`);
-      if (!res.ok) return;
-      const data = await res.json();
-      setModels(Array.isArray(data.models) ? data.models : []);
-      setActiveModel(data.active_model || "");
-    } catch (error) {
-      console.warn("Failed to fetch model list", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchModels();
-  }, [fetchModels]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -244,15 +198,20 @@ export default function AnalysisWorkspace() {
     setShowAdvancedAnalysisOptions(false);
   }, [activeTab, currentItem?.item_id]);
 
+  const currentImageParams = useMemo<ImageParams>(
+    () => (currentItem && imageParamsMap[currentItem.item_id]) || DEFAULT_IMAGE_PARAMS,
+    [currentItem, imageParamsMap]
+  );
+
+  const currentAnalysisParams = useMemo<AnalysisParams>(
+    () => (currentItem && analysisParamsMap[currentItem.item_id]) || DEFAULT_ANALYSIS_PARAMS,
+    [analysisParamsMap, currentItem]
+  );
+
   const currentAnalysis = useMemo(() => {
     if (!currentItem) return null;
     return analysisMap[currentItem.item_id] || null;
   }, [analysisMap, currentItem]);
-
-  const activeModelItem = useMemo(
-    () => models.find((model) => model.filename === activeModel) || null,
-    [activeModel, models]
-  );
 
   const displayedOutputs = useMemo<ResultOutput[]>(
     () => buildDisplayedOutputs(currentAnalysis, currentItem),
@@ -260,8 +219,8 @@ export default function AnalysisWorkspace() {
   );
 
   const lineDiagnosticsOutputs = useMemo<ResultOutput[]>(
-    () => buildLineDiagnosticsOutputs(currentAnalysis, currentItem, showColorwheelDebug),
-    [currentAnalysis, currentItem, showColorwheelDebug]
+    () => buildLineDiagnosticsOutputs(currentAnalysis, currentItem, currentAnalysisParams.showColorwheelDebug),
+    [currentAnalysis, currentItem, currentAnalysisParams.showColorwheelDebug]
   );
 
   const outputSections = useMemo<OutputSection[]>(
@@ -274,15 +233,12 @@ export default function AnalysisWorkspace() {
     [currentAnalysis, currentItem]
   );
 
-  const metricValueByKey = useMemo(
-    () => buildMetricValueByKey(currentAnalysis),
-    [currentAnalysis]
-  );
-
-  const irregularMethod = useMemo(
-    () => getIrregularMethod(irregularUseAdaptive, irregularUseNiblack),
-    [irregularUseAdaptive, irregularUseNiblack]
-  );
+  // The current result was computed with different settings than the ones shown.
+  const isCurrentAnalysisStale = useMemo(() => {
+    if (!currentItem || !currentAnalysis) return false;
+    const used = analysisParamsUsedMap[currentItem.item_id];
+    return !!used && JSON.stringify(used) !== JSON.stringify(currentAnalysisParams);
+  }, [analysisParamsUsedMap, currentAnalysis, currentAnalysisParams, currentItem]);
 
   const selectedItemStrokes = useMemo(
     () => getSelectedItemStrokes(currentItem?.item_id, strokeHistoryMap),
@@ -959,15 +915,11 @@ export default function AnalysisWorkspace() {
     setBrushSize(10);
     setMaskOverlayOpacity(0.6);
     setMaskMode("edit");
-    setThreshold(0.5);
-    setDenoise(0);
-    setSharpen(0);
-    setMorphology(0);
-    setGrayscale(false);
-    setInvertPixels(false);
-    setInvertMask(false);
-    segmentationUpdateKeyRef.current = "";
-    analysisUpdateKeyRef.current = "";
+    Object.values(resegmentTimersRef.current).forEach((id) => window.clearTimeout(id));
+    resegmentTimersRef.current = {};
+    setImageParamsMap({});
+    setAnalysisParamsMap({});
+    setAnalysisParamsUsedMap({});
     setStrokeCount(0);
     setEditorHistoryMap({});
     setEditorFutureMap({});
@@ -1002,13 +954,6 @@ export default function AnalysisWorkspace() {
     const formData = new FormData();
     selectedFiles.forEach((file) => formData.append("files", file));
     formData.append("client_session_id", clientSessionId);
-    formData.append("threshold", String(threshold));
-    formData.append("denoise", String(denoise));
-    formData.append("sharpen", String(sharpen));
-    formData.append("morphology", String(morphology));
-    formData.append("grayscale", String(grayscale));
-    formData.append("invert", String(invertPixels));
-    formData.append("invertMask", String(invertMask));
 
     try {
       const res = await fetch(`${BACKEND_URL}/api/upload`, {
@@ -1024,6 +969,12 @@ export default function AnalysisWorkspace() {
       }
 
       const previousSelectedId = selectedItemId;
+      // A fresh upload creates new item ids, so per-image settings start over.
+      Object.values(resegmentTimersRef.current).forEach((id) => window.clearTimeout(id));
+      resegmentTimersRef.current = {};
+      setImageParamsMap({});
+      setAnalysisParamsMap({});
+      setAnalysisParamsUsedMap({});
       setBatchData(data);
       if (data.items?.length) {
         const preservedItem =
@@ -1048,22 +999,202 @@ export default function AnalysisWorkspace() {
   }, [
     clientSessionId,
     currentItem?.original_filename,
-    denoise,
-    grayscale,
-    invertMask,
-    invertPixels,
-    morphology,
     selectedFiles,
     selectedItemId,
-    sharpen,
-    threshold,
   ]);
 
-  const handleRunAnalysis = useCallback(async (options?: { silent?: boolean; preserveTab?: boolean }) => {
+  const clearItemEditorState = useCallback((itemId: string) => {
+    const dropItem = <T,>(prev: Record<string, T>) => {
+      if (!(itemId in prev)) return prev;
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    };
+    setAnalysisMap(dropItem);
+    setEditedMaskMap(dropItem);
+    setMaskBaseMap(dropItem);
+    setStrokeHistoryMap(dropItem);
+    setEditorHistoryMap(dropItem);
+    setEditorFutureMap(dropItem);
+  }, []);
+
+  // Re-run preprocessing + U-Net for a single item with its own parameters.
+  // The item keeps its id, so other images' edits and overrides are untouched.
+  // predictedClass is the effective class: irregular images are binarized
+  // instead of going through the U-Net.
+  const resegmentItem = useCallback(async (item: UploadItem, params: ImageParams, predictedClass: string) => {
+    const seq = (resegmentSeqRef.current[item.item_id] || 0) + 1;
+    resegmentSeqRef.current[item.item_id] = seq;
+    setResegmentingIds((prev) => ({ ...prev, [item.item_id]: true }));
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/resegment-item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item: {
+            item_id: item.item_id,
+            item_dir: item.item_dir,
+            saved_path: item.saved_path,
+            predicted_class: predictedClass,
+          },
+          params: {
+            threshold: params.threshold,
+            denoise: params.denoise,
+            sharpen: params.sharpen,
+            morphology: params.morphology,
+            grayscale: params.grayscale,
+            invert: params.invertPixels,
+            invertMask: params.invertMask,
+            binarizeAdaptive: params.binarizeAdaptive,
+            binarizeNiblack: params.binarizeNiblack,
+            binarizeCombineMode: params.binarizeCombineMode,
+            binarizeAlpha: params.binarizeAlpha,
+            binarizeK: params.binarizeK,
+            binarizeNiblackWindow: params.binarizeNiblackWindow,
+            binarizeAdaptiveMethod: params.binarizeAdaptiveMethod,
+            binarizeBlockSize: params.binarizeBlockSize,
+            binarizeC: params.binarizeC,
+            binarizeBlur: params.binarizeBlur,
+            binarizeBlurKsize: params.binarizeBlurKsize,
+            binarizeEqualize: params.binarizeEqualize,
+            binarizeClahe: params.binarizeClahe,
+          },
+        }),
+      });
+      const data = await res.json();
+      // A newer request for this item superseded this one.
+      if (resegmentSeqRef.current[item.item_id] !== seq) return;
+
+      if (!res.ok) {
+        setStatus(data.error || `Re-segmentation failed for ${item.original_filename}.`);
+        return;
+      }
+
+      // The old mask edits were drawn against the previous mask.
+      clearItemEditorState(item.item_id);
+      setBatchData((prev) =>
+        prev
+          ? {
+              ...prev,
+              items: prev.items.map((existing) =>
+                existing.item_id === item.item_id ? { ...existing, ...data } : existing
+              ),
+            }
+          : prev
+      );
+    } catch (error) {
+      setStatus(`Cannot reach backend at ${BACKEND_URL}. Start backend server first.`);
+      console.warn("Re-segmentation request failed", error);
+    } finally {
+      if (resegmentSeqRef.current[item.item_id] === seq) {
+        setResegmentingIds((prev) => {
+          const next = { ...prev };
+          delete next[item.item_id];
+          return next;
+        });
+      }
+    }
+  }, [clearItemEditorState]);
+
+  const scheduleResegment = useCallback((item: UploadItem, params: ImageParams, predictedClass: string) => {
+    window.clearTimeout(resegmentTimersRef.current[item.item_id]);
+    setResegmentingIds((prev) => ({ ...prev, [item.item_id]: true }));
+    resegmentTimersRef.current[item.item_id] = window.setTimeout(() => {
+      delete resegmentTimersRef.current[item.item_id];
+      void resegmentItem(item, params, predictedClass);
+    }, 300);
+  }, [resegmentItem]);
+
+  const effectiveClass = useCallback(
+    (item: UploadItem) => classificationOverrides[item.item_id] ?? item.predicted_class,
+    [classificationOverrides]
+  );
+
+  const updateCurrentImageParams = useCallback((patch: Partial<ImageParams>) => {
+    if (!batchData || !currentItem) return;
+    const item = batchData.items.find((existing) => existing.item_id === currentItem.item_id);
+    if (!item) return;
+    const nextParams = { ...(imageParamsMap[item.item_id] || DEFAULT_IMAGE_PARAMS), ...patch };
+    setImageParamsMap((prev) => ({ ...prev, [item.item_id]: nextParams }));
+    scheduleResegment(item, nextParams, effectiveClass(item));
+  }, [batchData, currentItem, effectiveClass, imageParamsMap, scheduleResegment]);
+
+  // An override that switches between the U-Net and binarization needs a new mask.
+  const handleClassificationChange = useCallback((itemId: string, predictedClass: string) => {
+    handleClassificationOverride(itemId, predictedClass);
+    const item = batchData?.items.find((existing) => existing.item_id === itemId);
+    if (!item) return;
+    const segmentedClass = item.segmented_class ?? item.predicted_class;
+    if ((predictedClass === "irregular") !== (segmentedClass === "irregular")) {
+      window.clearTimeout(resegmentTimersRef.current[itemId]);
+      void resegmentItem(item, imageParamsMap[itemId] || DEFAULT_IMAGE_PARAMS, predictedClass);
+    }
+  }, [batchData, handleClassificationOverride, imageParamsMap, resegmentItem]);
+
+  const applyImageParamsToAll = useCallback(() => {
+    if (!batchData?.items?.length) return;
+    const params = currentImageParams;
+    const nextMap: Record<string, ImageParams> = {};
+    for (const item of batchData.items) {
+      nextMap[item.item_id] = params;
+      const current = imageParamsMap[item.item_id] || DEFAULT_IMAGE_PARAMS;
+      if (JSON.stringify(current) !== JSON.stringify(params)) {
+        scheduleResegment(item, params, effectiveClass(item));
+      }
+    }
+    setImageParamsMap(nextMap);
+    setStatus(`Applied current image settings to all ${batchData.items.length} images.`);
+  }, [batchData, currentImageParams, effectiveClass, imageParamsMap, scheduleResegment]);
+
+  const buildAnalysisItemPayload = useCallback((item: UploadItem, params: AnalysisParams) => {
+    const predictedClass = classificationOverrides[item.item_id] ?? item.predicted_class;
+    return {
+      ...item,
+      predicted_class: predictedClass,
+      image_size_um: params.imageSizeUm,
+      ...(predictedClass === "dots" || predictedClass === "mixed"
+        ? {
+            threshold_edge: params.voronoiThresholdEdge,
+            max_size: params.voronoiMaxSize,
+            packing_edges: params.voronoiPackingEdges,
+            extract_dots: params.voronoiExtractDots,
+            min_circularity: params.minCircularity,
+            max_aspect_ratio: params.maxAspectRatio,
+            min_area: params.minArea,
+            max_area: params.maxArea,
+          }
+        : {}),
+      ...(predictedClass === "lines" || predictedClass === "mixed"
+        ? {
+            num_clusters: params.colorwheelClusters,
+            domain_spacing_debug: params.showColorwheelDebug,
+          }
+        : {}),
+      ...(predictedClass === "irregular"
+        ? {
+            spacing_invert: params.irregularInvertSpacing,
+          }
+        : {}),
+    };
+  }, [classificationOverrides]);
+
+  // Runs analysis for the given items (default: the whole batch), each with its
+  // own settings. Results are merged so other items keep theirs.
+  const handleRunAnalysis = useCallback(async (options?: {
+    itemIds?: string[];
+    paramsOverride?: Record<string, AnalysisParams>;
+    preserveTab?: boolean;
+  }) => {
     if (!batchData?.items?.length) {
       setStatus("Upload a batch first.");
       return;
     }
+
+    const targetItems = options?.itemIds
+      ? batchData.items.filter((item) => options.itemIds?.includes(item.item_id))
+      : batchData.items;
+    if (!targetItems.length) return;
 
     const reachable = await isBackendReachable(BACKEND_URL);
     if (!reachable) {
@@ -1081,60 +1212,24 @@ export default function AnalysisWorkspace() {
       }
     }
 
-    setIsRunning(true);
-    if (!options?.silent) {
-      setStatus(
-        `Running analysis for all ${batchData.items.length} image${batchData.items.length === 1 ? "" : "s"}...`
-      );
+    const paramsByItem: Record<string, AnalysisParams> = {};
+    for (const item of targetItems) {
+      paramsByItem[item.item_id] =
+        options?.paramsOverride?.[item.item_id] || analysisParamsMap[item.item_id] || DEFAULT_ANALYSIS_PARAMS;
     }
+
+    const label =
+      targetItems.length === 1
+        ? targetItems[0].original_filename
+        : `all ${targetItems.length} images`;
+    setIsRunning(true);
+    setStatus(`Running analysis for ${label}...`);
 
     try {
       const payload = {
         job_id: batchData.job_id,
         job_dir: batchData.job_dir,
-        items: batchData.items.map((item) => {
-          const predictedClass = classificationOverrides[item.item_id] ?? item.predicted_class;
-          return {
-          ...item,
-          predicted_class: predictedClass,
-          image_size_um: imageSizeUm,
-          ...(predictedClass === "dots" || predictedClass === "mixed"
-            ? {
-                threshold_edge: voronoiThresholdEdge,
-                max_size: voronoiMaxSize,
-                packing_edges: voronoiPackingEdges,
-                extract_dots: voronoiExtractDots,
-                min_circularity: minCircularity,
-                max_aspect_ratio: maxAspectRatio,
-                min_area: minArea,
-                max_area: maxArea,
-              }
-            : {}),
-          ...(predictedClass === "lines" || predictedClass === "mixed"
-            ? {
-                num_clusters: colorwheelClusters,
-                domain_spacing_debug: showColorwheelDebug,
-              }
-            : {}),
-          ...(predictedClass === "irregular"
-            ? {
-                dan_method: irregularMethod,
-                dan_adaptive_method: irregularAdaptiveMethod,
-                dan_block_size: irregularAdaptiveBlockSize,
-                dan_c: irregularCValue,
-                dan_niblack_window: irregularNiblackWindow,
-                dan_k: irregularKValue,
-                dan_blur: irregularBlur,
-                dan_blur_ksize: irregularBlurKsize,
-                dan_equalize: irregularEqualize,
-                dan_clahe: irregularClahe,
-                dan_combine_mode: irregularCombineMode,
-                dan_alpha: irregularAlpha,
-                spacing_invert: irregularInvertSpacing,
-              }
-            : {}),
-          };
-        }),
+        items: targetItems.map((item) => buildAnalysisItemPayload(item, paramsByItem[item.item_id])),
         edited_masks_by_item_id: editedMasksSnapshot,
       };
 
@@ -1149,7 +1244,7 @@ export default function AnalysisWorkspace() {
       const data = await res.json();
 
       if (!res.ok) {
-        setStatus(data.error || "Batch analysis failed.");
+        setStatus(data.error || "Analysis failed.");
         return;
       }
 
@@ -1158,17 +1253,18 @@ export default function AnalysisWorkspace() {
         nextMap[result.item_id] = result;
       }
 
-      setAnalysisMap(nextMap);
+      setAnalysisMap((prev) => ({ ...prev, ...nextMap }));
+      setAnalysisParamsUsedMap((prev) => {
+        const next = { ...prev };
+        for (const itemId of Object.keys(nextMap)) {
+          if (paramsByItem[itemId]) next[itemId] = paramsByItem[itemId];
+        }
+        return next;
+      });
       if (!options?.preserveTab) {
         setActiveTab("results");
       }
-      if (!options?.silent) {
-        setStatus(
-          `Analysis complete for ${data.result_count || 0} image${
-            data.result_count === 1 ? "" : "s"
-          }.`
-        );
-      }
+      setStatus(`Analysis complete for ${label}.`);
     } catch (error) {
       setStatus(`Cannot reach backend at ${BACKEND_URL}. Start backend server first.`);
       console.warn("Batch analysis request failed", error);
@@ -1176,65 +1272,36 @@ export default function AnalysisWorkspace() {
       setIsRunning(false);
     }
   }, [
+    analysisParamsMap,
     batchData,
-    classificationOverrides,
+    buildAnalysisItemPayload,
     currentItem?.item_id,
     editedMaskMap,
-    imageSizeUm,
-    irregularAdaptiveBlockSize,
-    irregularAdaptiveMethod,
-    irregularAlpha,
-    irregularBlur,
-    irregularBlurKsize,
-    irregularCValue,
-    irregularClahe,
-    irregularCombineMode,
-    irregularEqualize,
-    irregularInvertSpacing,
-    irregularKValue,
-    irregularMethod,
-    irregularNiblackWindow,
     maskMode,
-    maxArea,
-    maxAspectRatio,
-    minArea,
-    minCircularity,
-    showColorwheelDebug,
-    voronoiExtractDots,
-    voronoiMaxSize,
-    voronoiPackingEdges,
-    voronoiThresholdEdge,
-    colorwheelClusters,
   ]);
 
-  const handleSwitchModel = useCallback(async (filename: string) => {
-    if (!filename || filename === activeModel) return;
-    setIsSwitchingModel(true);
-    setStatus(`Switching U-Net model to ${filename}...`);
-    try {
-      const res = await fetch(`${BACKEND_URL}/models/switch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setStatus(data.error || "Model switch failed.");
-        return;
-      }
-      setActiveModel(data.active_model || filename);
-      await fetchModels();
-      if (selectedFiles.length) {
-        await handleUpload({ preserveSelection: true, silent: true });
-      }
-      setStatus(`Model switched to ${data.active_model || filename}.`);
-    } catch (error) {
-      console.warn("Model switch failed", error);
-      setStatus("Failed to switch model.");
-    } finally {
-      setIsSwitchingModel(false);
+  const updateCurrentAnalysisParams = useCallback((patch: Partial<AnalysisParams>) => {
+    if (!currentItem) return;
+    setAnalysisParamsMap((prev) => ({
+      ...prev,
+      [currentItem.item_id]: { ...(prev[currentItem.item_id] || DEFAULT_ANALYSIS_PARAMS), ...patch },
+    }));
+  }, [currentItem]);
+
+  const rerunCurrentAnalysis = useCallback(() => {
+    if (!currentItem) return;
+    void handleRunAnalysis({ itemIds: [currentItem.item_id], preserveTab: true });
+  }, [currentItem, handleRunAnalysis]);
+
+  const applyAnalysisParamsToAllAndRerun = useCallback(() => {
+    if (!batchData?.items?.length) return;
+    const nextMap: Record<string, AnalysisParams> = {};
+    for (const item of batchData.items) {
+      nextMap[item.item_id] = currentAnalysisParams;
     }
-  }, [activeModel, fetchModels, handleUpload, selectedFiles.length]);
+    setAnalysisParamsMap(nextMap);
+    void handleRunAnalysis({ paramsOverride: nextMap, preserveTab: true });
+  }, [batchData, currentAnalysisParams, handleRunAnalysis]);
 
   const handleExportCurrentPdf = async () => {
     if (!batchData || !currentItem || !currentAnalysis) {
@@ -1276,6 +1343,17 @@ export default function AnalysisWorkspace() {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleExportCsv = () => {
+    if (!batchData?.items?.length || !Object.keys(analysisMap).length) {
+      setStatus("Run analysis before exporting CSV.");
+      return;
+    }
+
+    const csv = buildResultsCsv(batchData.items, analysisMap);
+    downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), `afm_results_${batchData.job_id}.csv`);
+    setStatus("Results CSV downloaded.");
   };
 
   const handleExportBatchPdf = async () => {
@@ -1325,117 +1403,6 @@ export default function AnalysisWorkspace() {
     }
   };
 
-  useEffect(() => {
-    if (!selectedFiles.length || !batchData || isUploading || isSwitchingModel) return;
-    const key = JSON.stringify({
-      threshold,
-      denoise,
-      sharpen,
-      morphology,
-      grayscale,
-      invertPixels,
-      invertMask,
-      activeModel,
-    });
-    if (!segmentationUpdateKeyRef.current) {
-      segmentationUpdateKeyRef.current = key;
-      return;
-    }
-    if (segmentationUpdateKeyRef.current === key) return;
-    segmentationUpdateKeyRef.current = key;
-
-    const timeoutId = window.setTimeout(() => {
-      void handleUpload({ preserveSelection: true, silent: true });
-    }, 450);
-    return () => window.clearTimeout(timeoutId);
-  }, [
-    activeModel,
-    batchData,
-    denoise,
-    grayscale,
-    handleUpload,
-    invertMask,
-    invertPixels,
-    isSwitchingModel,
-    isUploading,
-    morphology,
-    selectedFiles.length,
-    sharpen,
-    threshold,
-  ]);
-
-  useEffect(() => {
-    if (!batchData?.items?.length || !Object.keys(analysisMap).length || isRunning) return;
-    const key = JSON.stringify({
-      imageSizeUm,
-      colorwheelClusters,
-      showColorwheelDebug,
-      voronoiThresholdEdge,
-      voronoiMaxSize,
-      voronoiPackingEdges,
-      voronoiExtractDots,
-      minCircularity,
-      maxAspectRatio,
-      minArea,
-      maxArea,
-      irregularMethod,
-      irregularAdaptiveMethod,
-      irregularAdaptiveBlockSize,
-      irregularCValue,
-      irregularNiblackWindow,
-      irregularKValue,
-      irregularBlur,
-      irregularBlurKsize,
-      irregularEqualize,
-      irregularClahe,
-      irregularCombineMode,
-      irregularAlpha,
-      irregularInvertSpacing,
-      classificationOverrides,
-    });
-    if (!analysisUpdateKeyRef.current) {
-      analysisUpdateKeyRef.current = key;
-      return;
-    }
-    if (analysisUpdateKeyRef.current === key) return;
-    analysisUpdateKeyRef.current = key;
-
-    const timeoutId = window.setTimeout(() => {
-      void handleRunAnalysis({ silent: true, preserveTab: true });
-    }, 450);
-    return () => window.clearTimeout(timeoutId);
-  }, [
-    analysisMap,
-    batchData,
-    classificationOverrides,
-    colorwheelClusters,
-    handleRunAnalysis,
-    imageSizeUm,
-    isRunning,
-    maxArea,
-    maxAspectRatio,
-    minArea,
-    minCircularity,
-    showColorwheelDebug,
-    irregularAdaptiveBlockSize,
-    irregularAdaptiveMethod,
-    irregularAlpha,
-    irregularBlur,
-    irregularBlurKsize,
-    irregularCValue,
-    irregularClahe,
-    irregularCombineMode,
-    irregularEqualize,
-    irregularInvertSpacing,
-    irregularKValue,
-    irregularMethod,
-    irregularNiblackWindow,
-    voronoiExtractDots,
-    voronoiMaxSize,
-    voronoiPackingEdges,
-    voronoiThresholdEdge,
-  ]);
-
   const badgeClass = (name?: string) => String(name || "unknown").toUpperCase();
 
   return (
@@ -1444,12 +1411,7 @@ export default function AnalysisWorkspace() {
 
       <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--text)" }}>
         <WorkspaceHeader
-          activeModel={activeModel}
-          activeModelItem={activeModelItem}
           handleNewJob={handleNewJob}
-          handleSwitchModel={handleSwitchModel}
-          isSwitchingModel={isSwitchingModel}
-          models={models}
           setThemeMode={setThemeMode}
           themeMode={themeMode}
         />
@@ -1475,27 +1437,17 @@ export default function AnalysisWorkspace() {
               editedMaskMap={editedMaskMap}
               currentItem={currentItem}
               classifierClass={classifierClass}
-              onClassificationOverride={handleClassificationOverride}
+              onClassificationOverride={handleClassificationChange}
+              isResegmenting={!!(currentItem && resegmentingIds[currentItem.item_id])}
               saveCurrentCanvasForItem={saveCurrentCanvasForItem}
               setSelectedItemId={setSelectedItemId}
               setActiveTab={setActiveTab}
               badgeClass={badgeClass}
               showAdvancedImageOptions={showAdvancedImageOptions}
               setShowAdvancedImageOptions={setShowAdvancedImageOptions}
-              denoise={denoise}
-              setDenoise={setDenoise}
-              sharpen={sharpen}
-              setSharpen={setSharpen}
-              grayscale={grayscale}
-              setGrayscale={setGrayscale}
-              invertPixels={invertPixels}
-              setInvertPixels={setInvertPixels}
-              threshold={threshold}
-              setThreshold={setThreshold}
-              morphology={morphology}
-              setMorphology={setMorphology}
-              invertMask={invertMask}
-              setInvertMask={setInvertMask}
+              imageParams={currentImageParams}
+              onImageParamsChange={updateCurrentImageParams}
+              onApplyImageParamsToAll={applyImageParamsToAll}
               maskMode={maskMode}
               setMaskMode={setMaskMode}
               toolMode={toolMode}
@@ -1535,60 +1487,16 @@ export default function AnalysisWorkspace() {
               badgeClass={badgeClass}
               showAdvancedAnalysisOptions={showAdvancedAnalysisOptions}
               setShowAdvancedAnalysisOptions={setShowAdvancedAnalysisOptions}
-              imageSizeUm={imageSizeUm}
-              setImageSizeUm={setImageSizeUm}
-              colorwheelClusters={colorwheelClusters}
-              setColorwheelClusters={setColorwheelClusters}
-              showColorwheelDebug={showColorwheelDebug}
-              setShowColorwheelDebug={setShowColorwheelDebug}
-              voronoiThresholdEdge={voronoiThresholdEdge}
-              setVoronoiThresholdEdge={setVoronoiThresholdEdge}
-              voronoiMaxSize={voronoiMaxSize}
-              setVoronoiMaxSize={setVoronoiMaxSize}
-              voronoiPackingEdges={voronoiPackingEdges}
-              setVoronoiPackingEdges={setVoronoiPackingEdges}
-              voronoiExtractDots={voronoiExtractDots}
-              setVoronoiExtractDots={setVoronoiExtractDots}
-              minCircularity={minCircularity}
-              setMinCircularity={setMinCircularity}
-              maxAspectRatio={maxAspectRatio}
-              setMaxAspectRatio={setMaxAspectRatio}
-              minArea={minArea}
-              setMinArea={setMinArea}
-              maxArea={maxArea}
-              setMaxArea={setMaxArea}
-              irregularUseAdaptive={irregularUseAdaptive}
-              setIrregularUseAdaptive={setIrregularUseAdaptive}
-              irregularUseNiblack={irregularUseNiblack}
-              setIrregularUseNiblack={setIrregularUseNiblack}
-              irregularCombineMode={irregularCombineMode}
-              setIrregularCombineMode={setIrregularCombineMode}
-              irregularAlpha={irregularAlpha}
-              setIrregularAlpha={setIrregularAlpha}
-              irregularAdaptiveMethod={irregularAdaptiveMethod}
-              setIrregularAdaptiveMethod={setIrregularAdaptiveMethod}
-              irregularAdaptiveBlockSize={irregularAdaptiveBlockSize}
-              setIrregularAdaptiveBlockSize={setIrregularAdaptiveBlockSize}
-              irregularCValue={irregularCValue}
-              setIrregularCValue={setIrregularCValue}
-              irregularKValue={irregularKValue}
-              setIrregularKValue={setIrregularKValue}
-              irregularNiblackWindow={irregularNiblackWindow}
-              setIrregularNiblackWindow={setIrregularNiblackWindow}
-              irregularBlur={irregularBlur}
-              setIrregularBlur={setIrregularBlur}
-              irregularBlurKsize={irregularBlurKsize}
-              setIrregularBlurKsize={setIrregularBlurKsize}
-              irregularEqualize={irregularEqualize}
-              setIrregularEqualize={setIrregularEqualize}
-              irregularClahe={irregularClahe}
-              setIrregularClahe={setIrregularClahe}
-              irregularInvertSpacing={irregularInvertSpacing}
-              setIrregularInvertSpacing={setIrregularInvertSpacing}
+              analysisParams={currentAnalysisParams}
+              onAnalysisParamsChange={updateCurrentAnalysisParams}
+              onRerunAnalysis={rerunCurrentAnalysis}
+              onApplyAnalysisParamsToAll={applyAnalysisParamsToAllAndRerun}
+              isRunning={isRunning}
+              isAnalysisStale={isCurrentAnalysisStale}
+              status={status}
               outputSections={outputSections}
               setViewerImage={setViewerImage}
               importantMetrics={importantMetrics}
-              metricValueByKey={metricValueByKey}
             />
           )}
 
@@ -1599,6 +1507,7 @@ export default function AnalysisWorkspace() {
               currentAnalysis={currentAnalysis}
               isExporting={isExporting}
               handleExportBatchPdf={() => void handleExportBatchPdf()}
+              handleExportCsv={handleExportCsv}
               analysisMap={analysisMap}
             />
           )}

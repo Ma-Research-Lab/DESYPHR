@@ -6,7 +6,7 @@ from flask import abort, jsonify, make_response, request, send_file
 import settings as config
 from model_bundle import ModelBundle
 from services.export_service import build_batch_pdf_bytes, build_single_result_pdf_bytes
-from services.pipeline_service import analyze_one_item, process_single_file
+from services.pipeline_service import analyze_one_item, process_single_file, resegment_item
 from utils import sanitize_filename
 
 
@@ -83,6 +83,27 @@ def register_legacy_routes(app, models: ModelBundle):
                     "items": items,
                 }
             )
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/resegment-item", methods=["POST"])
+    def resegment_one_item():
+        try:
+            data = request.get_json(force=True)
+            item = data.get("item") or {}
+            params = data.get("params") or {}
+
+            saved_path = item.get("saved_path", "")
+            if not saved_path:
+                return jsonify({"error": "Missing saved_path."}), 400
+
+            results_root = config.RESULTS_DIR.resolve()
+            resolved = Path(saved_path).resolve()
+            if results_root not in resolved.parents or not resolved.exists():
+                return jsonify({"error": "Item image not found."}), 404
+
+            return jsonify(resegment_item(models, item, params))
 
         except Exception as e:
             return jsonify({"error": str(e)}), 500

@@ -1,26 +1,342 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Page background before the workspace theme loads; the workspace sets its
+   own light/dark tokens in GlobalWorkspaceStyles. */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: #f3f5f8;
+  color: #1f2a37;
+  font-family: "Source Sans 3", "Source Sans Pro", Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+
+/* ------------------------------------------------------------------------
+   Retro 8-bit theme (Theme menu). An original side-scroller look: sky with
+   pixel clouds, brick title strips, gold block buttons, green pipe tabs.
+   All art is hand-made CSS/SVG; nothing is copied from any game. Every rule
+   is scoped to data-theme="retro" so Default and Dark are untouched.
+   ------------------------------------------------------------------------ */
+
+:root[data-theme="retro"] {
+  --px-sky: #5c94fc;
+  --px-sky-low: #8fb8ff;
+  --px-brick: #b8501c;
+  --px-brick-dark: #6b2a08;
+  --px-gold: #f8b800;
+  --px-gold-dark: #b87800;
+  --px-gold-light: #ffe27a;
+  --px-green: #1fa52a;
+  --px-green-dark: #0b6b14;
+  --px-green-light: #7ee06a;
+  --px-ink: #111111;
+  --px-cream: #fff8e7;
+
+  --bg: var(--px-sky);
+  --surface: var(--px-cream);
+  --surface2: #fdeecb;
+  --border: var(--px-ink);
+  --accent: var(--px-brick);
+  --accent2: var(--px-green);
+  --accentTint: rgba(248, 184, 0, 0.28);
+  --accentTintStrong: rgba(248, 184, 0, 0.4);
+  --green: var(--px-green-dark);
+  --yellow: #9a5a00;
+  --text: #1a1a1a;
+  --muted: #5a4634;
+  --imageBg: #000000;
+  --navBg: var(--px-sky);
+  --navText: #ffffff;
+  --navMuted: var(--px-gold-light);
+  --shadow: none;
+  --overlayGrid: rgba(0, 0, 0, 0.06);
+  --overlayAxis: rgba(0, 0, 0, 0.14);
+
+  --font-pixel: var(--font-press-start), "Courier New", monospace;
+
+  --px-brick-tile: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' shape-rendering='crispEdges'%3E%3Crect width='32' height='32' fill='%23b8501c'/%3E%3Cg fill='%236b2a08'%3E%3Crect y='14' width='32' height='2'/%3E%3Crect y='30' width='32' height='2'/%3E%3Crect x='14' y='0' width='2' height='14'/%3E%3Crect x='30' y='0' width='2' height='14'/%3E%3Crect x='6' y='16' width='2' height='14'/%3E%3Crect x='22' y='16' width='2' height='14'/%3E%3C/g%3E%3Cg fill='%23e0804a'%3E%3Crect x='0' y='0' width='14' height='2'/%3E%3Crect x='16' y='0' width='14' height='2'/%3E%3Crect x='8' y='16' width='14' height='2'/%3E%3Crect x='24' y='16' width='6' height='2'/%3E%3Crect x='0' y='16' width='6' height='2'/%3E%3C/g%3E%3C/svg%3E");
+  --px-cloud: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='42' shape-rendering='crispEdges'%3E%3Cg fill='%23ffffff'%3E%3Crect x='30' y='0' width='24' height='6'/%3E%3Crect x='18' y='6' width='48' height='6'/%3E%3Crect x='12' y='12' width='60' height='6'/%3E%3Crect x='60' y='6' width='12' height='6'/%3E%3Crect x='6' y='18' width='84' height='6'/%3E%3Crect x='0' y='24' width='96' height='12'/%3E%3C/g%3E%3Crect x='6' y='36' width='84' height='6' fill='%23c8dcff'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="retro"] *:not(.px-round) {
+  border-radius: 0 !important;
+}
+
+:root[data-theme="retro"],
+:root[data-theme="retro"] body {
+  background-color: var(--px-sky) !important;
+  background-image: var(--px-cloud), var(--px-cloud), linear-gradient(var(--px-sky) 60%, var(--px-sky-low)) !important;
+  background-repeat: repeat-x, repeat-x, no-repeat !important;
+  background-size: 420px 42px, 420px 42px, 100% 100% !important;
+  background-position: 40px 150px, 250px 300px, 0 0 !important;
+  background-attachment: fixed !important;
+  min-height: 100vh;
+}
+
+/* Let the sky show through the workspace. */
+:root[data-theme="retro"] main {
+  background: transparent !important;
+}
+
+:root[data-theme="retro"] ::selection {
+  background: var(--px-gold);
+  color: var(--px-ink);
+}
+
+/* Gold block buttons. .px-flat opts a button out (tabs, list rows). */
+:root[data-theme="retro"] button:not(.px-flat) {
+  background: var(--px-gold) !important;
+  color: var(--px-ink) !important;
+  border: 3px solid var(--px-ink) !important;
+  box-shadow: inset -3px -3px 0 var(--px-gold-dark), inset 3px 3px 0 var(--px-gold-light), 3px 3px 0 var(--px-ink) !important;
+  padding: 8px 14px !important;
+  font-family: var(--font-pixel) !important;
+  font-size: 10px !important;
+  font-weight: normal !important;
+  line-height: 1.4 !important;
+  text-transform: uppercase !important;
+  text-shadow: none !important;
+  background-image: none !important;
+  transition: none !important;
+}
+
+:root[data-theme="retro"] button:not(.px-flat):not(:disabled):hover {
+  background: #ffc928 !important;
+}
+
+:root[data-theme="retro"] button:not(.px-flat):not(:disabled):active {
+  transform: translate(2px, 2px);
+  box-shadow: inset 3px 3px 0 var(--px-gold-dark), 1px 1px 0 var(--px-ink) !important;
+}
+
+:root[data-theme="retro"] button:disabled {
+  background: #c9c2b4 !important;
+  color: #6f675b !important;
+  box-shadow: inset -3px -3px 0 #9d9688, inset 3px 3px 0 #e6e0d4, 3px 3px 0 var(--px-ink) !important;
+  cursor: not-allowed;
+}
+
+:root[data-theme="retro"] button:focus-visible,
+:root[data-theme="retro"] select:focus-visible,
+:root[data-theme="retro"] input:focus-visible,
+:root[data-theme="retro"] a:focus-visible {
+  outline: 3px dashed var(--px-ink) !important;
+  outline-offset: 3px;
+}
+
+/* Text fields and drop-downs. */
+:root[data-theme="retro"] input[type="text"],
+:root[data-theme="retro"] input[type="number"],
+:root[data-theme="retro"] select,
+:root[data-theme="retro"] textarea {
+  background-color: #fff !important;
+  color: var(--px-ink) !important;
+  border: 3px solid var(--px-ink) !important;
+  box-shadow: inset 3px 3px 0 #ded6c4 !important;
+  padding: 6px 30px 6px 8px !important;
+  font-size: 13px !important;
+}
+
+:root[data-theme="retro"] select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M0 0h12v2H10v2H8v2H6v2H6V6H4V4H2V2H0z' fill='%23111'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 9px center !important;
+}
+
+/* Check boxes. */
+:root[data-theme="retro"] input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+  background: #fff;
+  border: 3px solid var(--px-ink);
+  cursor: pointer;
+}
+
+:root[data-theme="retro"] input[type="checkbox"]:checked {
+  background: var(--px-green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'%3E%3Cpath d='M6 0h2v2H6v2H4v2H2V4H0V2h2v2h2V2h2z' fill='%23fff'/%3E%3C/svg%3E") no-repeat center;
+}
+
+/* Sliders: brick track, gold block thumb. */
+:root[data-theme="retro"] input[type="range"] {
+  appearance: none;
+  background: transparent;
+  height: 22px;
+  cursor: pointer;
+}
+
+:root[data-theme="retro"] input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  background: var(--px-brick);
+  border: 2px solid var(--px-ink);
+}
+
+:root[data-theme="retro"] input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 20px;
+  margin-top: -8px;
+  background: var(--px-gold);
+  border: 3px solid var(--px-ink);
+  box-shadow: inset -2px -2px 0 var(--px-gold-dark);
+}
+
+:root[data-theme="retro"] input[type="range"]::-moz-range-track {
+  height: 8px;
+  background: var(--px-brick);
+  border: 2px solid var(--px-ink);
+}
+
+:root[data-theme="retro"] input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 20px;
+  border: 3px solid var(--px-ink);
+  border-radius: 0;
+  background: var(--px-gold);
+  box-shadow: inset -2px -2px 0 var(--px-gold-dark);
+}
+
+:root[data-theme="retro"] * {
+  scrollbar-color: var(--px-brick) var(--surface2);
+}
+
+/* Panels: cream block, brick title strip, hard pixel shadow. */
+:root[data-theme="retro"] .ws-panel {
+  background: var(--surface) !important;
+  border: 4px solid var(--px-ink) !important;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.35) !important;
+}
+
+:root[data-theme="retro"] .ws-panel-title {
+  padding: 10px 14px !important;
+  background: var(--px-brick-tile);
+  background-size: 32px 32px;
+  border-bottom: 4px solid var(--px-ink) !important;
+  color: #fff !important;
+  font-family: var(--font-pixel);
+  font-size: 11px !important;
+  font-weight: normal !important;
+  line-height: 1.5;
+  text-transform: uppercase !important;
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+/* Top bar and stepper on the sky. */
+:root[data-theme="retro"] .ws-nav {
+  background: var(--px-sky) !important;
+  border-bottom: 4px solid var(--px-ink);
+}
+
+:root[data-theme="retro"] .ws-brand span,
+:root[data-theme="retro"] .ws-nav-label {
+  font-family: var(--font-pixel);
+  text-transform: uppercase !important;
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .ws-brand span:first-child {
+  font-size: 14px !important;
+  font-weight: normal !important;
+}
+
+:root[data-theme="retro"] .ws-brand span:last-child,
+:root[data-theme="retro"] .ws-nav-label {
+  font-size: 8px !important;
+  color: var(--px-gold-light) !important;
+}
+
+:root[data-theme="retro"] .ws-stepper {
+  background: var(--px-sky) !important;
+  border-bottom: 4px solid var(--px-ink) !important;
+  color: #fff;
+}
+
+:root[data-theme="retro"] .ws-stepper > div > div {
+  color: #fff !important;
+  font-family: var(--font-pixel);
+  font-size: 9px !important;
+  text-transform: uppercase !important;
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .ws-step-dot {
+  border: 3px solid var(--px-ink) !important;
+  background: #fff !important;
+  color: var(--px-ink) !important;
+  text-shadow: none;
+  width: 26px !important;
+  height: 26px !important;
+}
+
+/* A finished step turns into a gold coin. */
+:root[data-theme="retro"] .ws-step-done {
+  background: var(--px-gold) !important;
+  box-shadow: inset -3px 0 0 var(--px-gold-dark), inset 3px 0 0 var(--px-gold-light);
+  color: transparent !important;
+}
+
+:root[data-theme="retro"] .ws-step-line {
+  height: 0 !important;
+  background: none !important;
+  border-top: 4px dotted rgba(255, 255, 255, 0.7);
+}
+
+:root[data-theme="retro"] .ws-step-line-done {
+  border-top-color: var(--px-gold);
+}
+
+/* Pipe-style stage tabs. */
+:root[data-theme="retro"] .ws-tab {
+  position: relative;
+  padding: 12px 18px 10px !important;
+  margin-right: 10px !important;
+  border: 4px solid var(--px-ink) !important;
+  border-bottom: none !important;
+  background: linear-gradient(90deg, var(--px-green-light) 0 18%, var(--px-green) 18% 70%, var(--px-green-dark) 70%) !important;
+  color: #fff !important;
+  font-family: var(--font-pixel);
+  font-size: 10px !important;
+  font-weight: normal !important;
+  text-transform: uppercase !important;
+  text-shadow: 2px 2px 0 var(--px-ink);
+  top: 6px;
+}
+
+:root[data-theme="retro"] .ws-tab[aria-selected="true"] {
+  top: 0;
+  padding-bottom: 16px !important;
+}
+
+:root[data-theme="retro"] .ws-tab:hover {
+  filter: brightness(1.08);
+}
+
+:root[data-theme="retro"] [role="tablist"] {
+  border-bottom: 4px solid var(--px-ink) !important;
+}
+
+/* Batch rows: bordered cream rows, gold when selected. */
+:root[data-theme="retro"] .ws-row {
+  border: 3px solid var(--px-ink) !important;
+}
+
+/* Brick ground strip as the footer. */
+:root[data-theme="retro"] .ws-footer {
+  max-width: none !important;
+  margin-top: 12px !important;
+  padding: 26px 28px !important;
+  background: var(--px-brick-tile);
+  background-size: 32px 32px;
+  border-top: 4px solid var(--px-ink);
+  color: #fff !important;
+  font-family: var(--font-pixel);
+  font-size: 9px !important;
+  text-shadow: 2px 2px 0 var(--px-ink);
+}
+
+:root[data-theme="retro"] .ws-footer a {
+  color: var(--px-gold-light) !important;
 }

@@ -20,6 +20,10 @@ export type UploadItem = {
   min_confidence?: number;
   max_confidence?: number;
   mask_shape?: number[];
+  // Share of feature (white) pixels in a binarized irregular mask.
+  black_pixel_percent?: number | null;
+  // Class the current mask was segmented for (an override can change it).
+  segmented_class?: string;
   preprocessing?: {
     denoise: number;
     sharpen: number;
@@ -79,7 +83,13 @@ export type EditorSnapshot = {
   selectedLayerId: string;
 };
 
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "light" | "dark" | "retro";
+
+export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "light", label: "Default" },
+  { value: "dark", label: "Dark" },
+  { value: "retro", label: "Retro 8-bit" },
+];
 
 export type DomainSpacing = {
   mean_spacing_nm: number;
@@ -126,6 +136,7 @@ export type AnalysisResponse = {
   } | null;
   group_pixel_counts_text?: string;
   metrics: MetricRow[];
+  raw_metrics?: MetricRow[];
   details: string;
   additional_outputs?: { label: string; url: string }[];
 };
@@ -158,4 +169,81 @@ export type OutputSection = {
   title: string;
   helper: string;
   items: ResultOutput[];
+};
+
+export type ImageParams = {
+  threshold: number;
+  denoise: number;
+  sharpen: number;
+  morphology: number;
+  grayscale: boolean;
+  invertPixels: boolean;
+  invertMask: boolean;
+  // Binarization of irregular images (replaces the U-Net mask).
+  binarizeAdaptive: boolean;
+  binarizeNiblack: boolean;
+  binarizeCombineMode: "OR" | "AND" | "adaptive" | "niblack" | "weighted";
+  binarizeAlpha: number;
+  binarizeK: number;
+  binarizeNiblackWindow: number;
+  binarizeAdaptiveMethod: "gaussian" | "mean";
+  binarizeBlockSize: number;
+  binarizeC: number;
+  binarizeBlur: "none" | "gaussian" | "median" | "bilateral";
+  binarizeBlurKsize: number;
+  binarizeEqualize: boolean;
+  binarizeClahe: boolean;
+};
+
+export const DEFAULT_IMAGE_PARAMS: ImageParams = {
+  threshold: 0.5,
+  denoise: 0,
+  sharpen: 0,
+  morphology: 0,
+  grayscale: false,
+  invertPixels: false,
+  invertMask: false,
+  binarizeAdaptive: true,
+  binarizeNiblack: true,
+  binarizeCombineMode: "OR",
+  binarizeAlpha: 0.5,
+  binarizeK: 0.1,
+  binarizeNiblackWindow: 25,
+  binarizeAdaptiveMethod: "gaussian",
+  binarizeBlockSize: 11,
+  binarizeC: 2,
+  binarizeBlur: "none",
+  binarizeBlurKsize: 5,
+  binarizeEqualize: false,
+  binarizeClahe: false,
+};
+
+export type AnalysisParams = {
+  imageSizeUm: number;
+  colorwheelClusters: number;
+  showColorwheelDebug: boolean;
+  voronoiThresholdEdge: number;
+  voronoiMaxSize: number;
+  voronoiPackingEdges: 4 | 6;
+  voronoiExtractDots: boolean;
+  minCircularity: number;
+  maxAspectRatio: number;
+  minArea: number;
+  maxArea: number;
+  irregularInvertSpacing: boolean;
+};
+
+export const DEFAULT_ANALYSIS_PARAMS: AnalysisParams = {
+  imageSizeUm: 1.0,
+  colorwheelClusters: 4,
+  showColorwheelDebug: false,
+  voronoiThresholdEdge: 0.25,
+  voronoiMaxSize: 1024,
+  voronoiPackingEdges: 6,
+  voronoiExtractDots: true,
+  minCircularity: 0.6,
+  maxAspectRatio: 1.8,
+  minArea: 0,
+  maxArea: 1200,
+  irregularInvertSpacing: false,
 };

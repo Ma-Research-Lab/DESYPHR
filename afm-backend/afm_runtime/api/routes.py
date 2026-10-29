@@ -343,7 +343,7 @@ def create_routes(app, model_manager, cnn_classifier=None):
                     mask_array,
                     min_circularity=float(data.get('min_circularity', 0.6)),
                     max_aspect_ratio=float(data.get('max_aspect_ratio', 1.8)),
-                    min_area=int(data.get('min_area', 15)),
+                    min_area=int(data.get('min_area', 0)),
                     max_area=int(data.get('max_area', 400)),
                 )
                 mask_array = dot_result['dots_mask']

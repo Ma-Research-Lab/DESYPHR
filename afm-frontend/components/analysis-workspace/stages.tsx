@@ -10,8 +10,11 @@ import {
   toolButtonStyle,
 } from "./helpers";
 import { CompactMetric, ImageFrame, Panel, RadioOption, ResultsImage, SliderRow } from "./ui";
+import { DEFAULT_ANALYSIS_PARAMS, DEFAULT_IMAGE_PARAMS } from "./types";
 import type {
+  AnalysisParams,
   AnalysisResponse,
+  ImageParams,
   MaskStroke,
   OutputSection,
   UploadBatchResponse,
@@ -41,20 +44,9 @@ export function UploadStage({
   badgeClass,
   showAdvancedImageOptions,
   setShowAdvancedImageOptions,
-  denoise,
-  setDenoise,
-  sharpen,
-  setSharpen,
-  grayscale,
-  setGrayscale,
-  invertPixels,
-  setInvertPixels,
-  threshold,
-  setThreshold,
-  morphology,
-  setMorphology,
-  invertMask,
-  setInvertMask,
+  imageParams,
+  onImageParamsChange,
+  onApplyImageParamsToAll,
   maskMode,
   setMaskMode,
   toolMode,
@@ -81,6 +73,7 @@ export function UploadStage({
   isRunning,
   maskLayerId,
   canvasSize,
+  isResegmenting,
 }: {
   hiddenFileInputRef: RefObject<HTMLInputElement | null>;
   isDragActive: boolean;
@@ -103,20 +96,9 @@ export function UploadStage({
   badgeClass: (name?: string) => string;
   showAdvancedImageOptions: boolean;
   setShowAdvancedImageOptions: Dispatch<SetStateAction<boolean>>;
-  denoise: number;
-  setDenoise: Dispatch<SetStateAction<number>>;
-  sharpen: number;
-  setSharpen: Dispatch<SetStateAction<number>>;
-  grayscale: boolean;
-  setGrayscale: Dispatch<SetStateAction<boolean>>;
-  invertPixels: boolean;
-  setInvertPixels: Dispatch<SetStateAction<boolean>>;
-  threshold: number;
-  setThreshold: Dispatch<SetStateAction<number>>;
-  morphology: number;
-  setMorphology: Dispatch<SetStateAction<number>>;
-  invertMask: boolean;
-  setInvertMask: Dispatch<SetStateAction<boolean>>;
+  imageParams: ImageParams;
+  onImageParamsChange: (patch: Partial<ImageParams>) => void;
+  onApplyImageParamsToAll: () => void;
   maskMode: "use" | "edit";
   setMaskMode: Dispatch<SetStateAction<"use" | "edit">>;
   toolMode: "draw" | "erase";
@@ -143,7 +125,21 @@ export function UploadStage({
   isRunning: boolean;
   maskLayerId: string;
   canvasSize: number;
+  isResegmenting: boolean;
 }) {
+  const isIrregular = currentItem?.predicted_class === "irregular";
+  const showImageOptions = showAdvancedImageOptions || isIrregular;
+  const selectStyle = {
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 5,
+    border: "1px solid var(--border)",
+    background: "var(--surface)",
+    color: "var(--text)",
+  };
+  const optionBoxStyle = { border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" };
+  const checkboxRowStyle = { display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1.35fr", gap: 18 }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -178,7 +174,7 @@ export function UploadStage({
               padding: "36px 24px",
               textAlign: "center",
               cursor: "pointer",
-              background: isDragActive ? "rgba(0,212,255,0.12)" : "rgba(0,212,255,0.02)",
+              background: isDragActive ? "var(--accentTintStrong)" : "var(--surface2)",
             }}
           >
             <input
@@ -279,6 +275,7 @@ export function UploadStage({
                         setSelectedFiles((prev) => prev.filter((_, i) => i !== idx));
                       }}
                       title="Remove file"
+                      className="px-flat"
                       style={{
                         border: "1px solid var(--border)",
                         background: "var(--surface)",
@@ -320,6 +317,7 @@ export function UploadStage({
                 return (
                   <button
                     key={item.item_id}
+                    className="px-flat ws-row"
                     onClick={() => {
                       saveCurrentCanvasForItem(currentItem?.item_id);
                       setSelectedItemId(item.item_id);
@@ -330,7 +328,7 @@ export function UploadStage({
                       padding: "10px 12px",
                       borderRadius: 6,
                       border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
-                      background: isSelected ? "rgba(0,212,255,0.08)" : "var(--surface2)",
+                      background: isSelected ? "var(--accentTint)" : "var(--surface)",
                       color: "var(--text)",
                       cursor: "pointer",
                     }}
@@ -363,9 +361,9 @@ export function UploadStage({
                 fontSize: "0.78rem",
                 fontWeight: 700,
                 letterSpacing: "0.1em",
-                background: "rgba(0,212,255,0.1)",
+                background: "var(--accentTint)",
                 color: "var(--accent)",
-                border: "1px solid rgba(0,212,255,0.3)",
+                border: "1px solid transparent",
               }}
             >
               CLASS {currentItem ? badgeClass(currentItem.predicted_class) : "NO IMAGE"}
@@ -408,448 +406,559 @@ export function UploadStage({
           </div>
         </Panel>
 
-        <Panel title="Image Advanced Options" accentColor="var(--yellow)">
+        <Panel title={isIrregular ? "Binarization Options" : "Image Advanced Options"} accentColor="var(--yellow)">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ fontSize: "0.74rem", color: "var(--muted)" }}>
-              Segmentation settings and model selection
+            <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
+              {!currentItem
+                ? "Upload images to adjust per-image segmentation settings"
+                : isIrregular
+                  ? `Binarization settings for ${currentItem.original_filename}. The binarized mask updates as you change them.`
+                  : `Segmentation settings for ${currentItem.original_filename}`}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedImageOptions((prev) => !prev)}
-              style={secondaryButtonStyle}
-            >
-              {showAdvancedImageOptions ? "Hide Advanced Options" : "Show Advanced Options"}
-            </button>
+            {!isIrregular ? (
+              <button
+                type="button"
+                onClick={() => setShowAdvancedImageOptions((prev) => !prev)}
+                style={secondaryButtonStyle}
+              >
+                {showAdvancedImageOptions ? "Hide Advanced Options" : "Show Advanced Options"}
+              </button>
+            ) : null}
           </div>
 
-          {showAdvancedImageOptions ? (
-            <>
+          {showImageOptions ? (
+            <fieldset disabled={!currentItem} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
               <div style={{ marginTop: 14, display: "grid", gap: 14 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" }}>
                     <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Preprocessing</div>
                     <div style={{ display: "grid", gap: 12 }}>
-                      <SliderRow label="Denoise Strength" min={0} max={30} step={1} value={denoise} onChange={(value) => setDenoise(Math.round(value))} />
-                      <SliderRow label="Sharpen / Deblur" min={0} max={10} step={1} value={sharpen} onChange={(value) => setSharpen(Math.round(value))} />
+                      <SliderRow label="Denoise Strength" min={0} max={30} step={1} value={imageParams.denoise} onChange={(value) => onImageParamsChange({ denoise: Math.round(value) })} />
+                      <SliderRow label="Sharpen / Deblur" min={0} max={10} step={1} value={imageParams.sharpen} onChange={(value) => onImageParamsChange({ sharpen: Math.round(value) })} />
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={grayscale} onChange={(e) => setGrayscale(e.target.checked)} />
+                        <input type="checkbox" checked={imageParams.grayscale} onChange={(e) => onImageParamsChange({ grayscale: e.target.checked })} />
                         Convert to Grayscale
                       </label>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={invertPixels} onChange={(e) => setInvertPixels(e.target.checked)} />
+                        <input type="checkbox" checked={imageParams.invertPixels} onChange={(e) => onImageParamsChange({ invertPixels: e.target.checked })} />
                         Invert Pixels
                       </label>
                     </div>
                   </div>
 
-                  <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" }}>
-                    <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Postprocessing</div>
-                    <div style={{ display: "grid", gap: 12 }}>
-                      <SliderRow label="Confidence Threshold" min={0.1} max={0.9} step={0.01} value={threshold} onChange={setThreshold} />
-                      <SliderRow label="Remove Noise" min={0} max={7} step={1} value={morphology} onChange={(value) => setMorphology(Math.round(value))} />
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={invertMask} onChange={(e) => setInvertMask(e.target.checked)} />
-                        Invert Mask
-                      </label>
+                  {isIrregular ? (
+                    <div style={optionBoxStyle}>
+                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Threshold Methods</div>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <label style={checkboxRowStyle}>
+                          <input type="checkbox" checked={imageParams.binarizeAdaptive} onChange={(e) => onImageParamsChange({ binarizeAdaptive: e.target.checked })} />
+                          Adaptive threshold
+                        </label>
+                        <label style={checkboxRowStyle}>
+                          <input type="checkbox" checked={imageParams.binarizeNiblack} onChange={(e) => onImageParamsChange({ binarizeNiblack: e.target.checked })} />
+                          Niblack threshold
+                        </label>
+                        {imageParams.binarizeAdaptive && imageParams.binarizeNiblack ? (
+                          <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
+                            <span>Combine Logic</span>
+                            <select
+                              value={imageParams.binarizeCombineMode}
+                              onChange={(e) => onImageParamsChange({ binarizeCombineMode: e.target.value as ImageParams["binarizeCombineMode"] })}
+                              style={selectStyle}
+                            >
+                              <option value="OR">OR</option>
+                              <option value="AND">AND</option>
+                              <option value="adaptive">Adaptive only</option>
+                              <option value="niblack">Niblack only</option>
+                              <option value="weighted">Weighted</option>
+                            </select>
+                          </label>
+                        ) : null}
+                        {imageParams.binarizeAdaptive && imageParams.binarizeNiblack && imageParams.binarizeCombineMode === "weighted" ? (
+                          <SliderRow label="Alpha (adaptive weight)" min={0} max={1} step={0.05} value={imageParams.binarizeAlpha} onChange={(value) => onImageParamsChange({ binarizeAlpha: value })} />
+                        ) : null}
+                        <label style={checkboxRowStyle}>
+                          <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
+                          Invert Mask
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" }}>
+                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Postprocessing</div>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <SliderRow label="Confidence Threshold" min={0.1} max={0.9} step={0.01} value={imageParams.threshold} onChange={(value) => onImageParamsChange({ threshold: value })} />
+                        <SliderRow label="Remove Noise" min={0} max={7} step={1} value={imageParams.morphology} onChange={(value) => onImageParamsChange({ morphology: Math.round(value) })} />
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
+                          <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
+                          Invert Mask
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {isIrregular ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div style={{ ...optionBoxStyle, opacity: imageParams.binarizeAdaptive ? 1 : 0.5 }}>
+                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Adaptive</div>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
+                          <span>Adaptive Method</span>
+                          <select
+                            value={imageParams.binarizeAdaptiveMethod}
+                            onChange={(e) => onImageParamsChange({ binarizeAdaptiveMethod: e.target.value as ImageParams["binarizeAdaptiveMethod"] })}
+                            disabled={!imageParams.binarizeAdaptive}
+                            style={selectStyle}
+                          >
+                            <option value="gaussian">Gaussian</option>
+                            <option value="mean">Mean</option>
+                          </select>
+                        </label>
+                        <SliderRow label="Block Size" min={3} max={101} step={2} value={imageParams.binarizeBlockSize} onChange={(value) => onImageParamsChange({ binarizeBlockSize: Math.round(value) | 1 })} />
+                        <SliderRow label="C Value" min={-50} max={30} step={1} value={imageParams.binarizeC} onChange={(value) => onImageParamsChange({ binarizeC: Math.round(value) })} />
+                      </div>
+                    </div>
+
+                    <div style={optionBoxStyle}>
+                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Niblack + Filters</div>
+                      <div style={{ display: "grid", gap: 12 }}>
+                        <div style={{ display: "grid", gap: 12, opacity: imageParams.binarizeNiblack ? 1 : 0.5 }}>
+                          <SliderRow label="Niblack k" min={-1} max={1} step={0.05} value={imageParams.binarizeK} onChange={(value) => onImageParamsChange({ binarizeK: value })} />
+                          <SliderRow label="Niblack Window" min={3} max={111} step={2} value={imageParams.binarizeNiblackWindow} onChange={(value) => onImageParamsChange({ binarizeNiblackWindow: Math.round(value) | 1 })} />
+                        </div>
+                        <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
+                          <span>Blur</span>
+                          <select
+                            value={imageParams.binarizeBlur}
+                            onChange={(e) => onImageParamsChange({ binarizeBlur: e.target.value as ImageParams["binarizeBlur"] })}
+                            style={selectStyle}
+                          >
+                            <option value="none">None</option>
+                            <option value="gaussian">Gaussian</option>
+                            <option value="median">Median</option>
+                            <option value="bilateral">Bilateral</option>
+                          </select>
+                        </label>
+                        {imageParams.binarizeBlur === "gaussian" || imageParams.binarizeBlur === "median" ? (
+                          <SliderRow label="Blur Kernel" min={3} max={21} step={2} value={imageParams.binarizeBlurKsize} onChange={(value) => onImageParamsChange({ binarizeBlurKsize: Math.round(value) | 1 })} />
+                        ) : null}
+                        <label style={checkboxRowStyle}>
+                          <input type="checkbox" checked={imageParams.binarizeEqualize} onChange={(e) => onImageParamsChange({ binarizeEqualize: e.target.checked })} />
+                          Equalize histogram
+                        </label>
+                        <label style={checkboxRowStyle}>
+                          <input type="checkbox" checked={imageParams.binarizeClahe} onChange={(e) => onImageParamsChange({ binarizeClahe: e.target.checked })} />
+                          CLAHE
+                        </label>
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : null}
               </div>
 
-              <div style={{ marginTop: 14 }}>
+              <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setThreshold(0.5);
-                    setDenoise(0);
-                    setSharpen(0);
-                    setMorphology(0);
-                    setGrayscale(false);
-                    setInvertPixels(false);
-                    setInvertMask(false);
-                  }}
+                  onClick={() => onImageParamsChange(DEFAULT_IMAGE_PARAMS)}
                   style={secondaryButtonStyle}
                 >
                   Reset Parameters
                 </button>
+                {(batchData?.items?.length || 0) > 1 ? (
+                  <button type="button" onClick={onApplyImageParamsToAll} style={secondaryButtonStyle}>
+                    Apply to All Images
+                  </button>
+                ) : null}
               </div>
-            </>
+            </fieldset>
           ) : null}
         </Panel>
       </div>
 
       <div>
-        {currentItem?.predicted_class === "irregular" ? (
-          <Panel title="Irregular Pipeline Input" style={{ marginBottom: 16 }}>
-            <p style={{ fontSize: "0.76rem", color: "var(--muted)", lineHeight: 1.65, marginBottom: 14 }}>
-              Irregular morphology bypasses the U-Net mask stage. The irregular analysis pipeline runs directly on the preprocessed image instead.
-            </p>
-            <ImageFrame
-              src={currentItem?.preprocessed_image_url || currentItem?.original_image_url || ""}
-              caption="preprocessed_irregular_input.png"
-              height={260}
-            />
-          </Panel>
-        ) : (
-          <Panel title="Binary Mask" style={{ marginBottom: 16 }}>
-            <p style={{ fontSize: "0.76rem", color: "var(--muted)", lineHeight: 1.65, marginBottom: 14 }}>
-              Review the raw binary mask before analysis. <span style={{ color: "var(--text)" }}>White regions</span> = detected features.{" "}
-              <span style={{ color: "var(--text)" }}>Black</span> = background.
-            </p>
+        <Panel title={isIrregular ? "Binarized Mask" : "Binary Mask"} style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: "0.76rem", color: "var(--muted)", lineHeight: 1.65, marginBottom: 14 }}>
+            {isIrregular
+              ? "Irregular images skip the U-Net. The preprocessed image is binarized with the options on the left. "
+              : "Review the raw binary mask before analysis. "}
+            <span style={{ color: "var(--text)" }}>White regions</span> = detected features.{" "}
+            <span style={{ color: "var(--text)" }}>Black</span> = background.
+          </p>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: currentItem?.confidence_image_url ? "1fr 1fr" : "1fr",
-                gap: 12,
-              }}
-            >
+          {isIrregular ? (
+            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, fontSize: "0.74rem", color: "var(--muted)" }}>
+              <span>
+                Feature pixels:{" "}
+                <strong style={{ color: "var(--text)" }}>
+                  {currentItem?.black_pixel_percent != null ? `${currentItem.black_pixel_percent}%` : "—"}
+                </strong>
+              </span>
+              <span aria-live="polite" style={{ color: isResegmenting ? "var(--accent)" : "var(--muted)" }}>
+                {isResegmenting ? "Updating mask…" : "Mask up to date"}
+              </span>
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: currentItem?.confidence_image_url || isIrregular ? "1fr 1fr" : "1fr",
+              gap: 12,
+              opacity: isResegmenting ? 0.7 : 1,
+              transition: "opacity 120ms",
+            }}
+          >
+            {isIrregular ? (
               <ImageFrame
-                src={currentItem?.mask_image_url || ""}
-                caption={currentItem?.mask_filename || "unet_mask_preview.png"}
+                src={currentItem?.preprocessed_image_url || currentItem?.original_image_url || ""}
+                caption="preprocessed_input.png"
                 height={260}
               />
-              {currentItem?.confidence_image_url ? (
-                <ImageFrame
-                  src={currentItem.confidence_image_url}
-                  caption="u-net_probability_map.png"
-                  height={260}
-                />
-              ) : null}
-            </div>
-
-            <div style={{ marginTop: 14 }}>
-              <p
-                style={{
-                  fontSize: "0.76rem",
-                  fontWeight: 600,
-                  color: "var(--text)",
-                  marginBottom: 8,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.06em",
-                }}
-              >
-                Proceed with selected mask?
-              </p>
-
-              <RadioOption
-                active={maskMode === "use"}
-                accent="green"
-                onClick={() => setMaskMode("use")}
-                label="Use mask as-is"
-                icon="▶"
-              />
-              <RadioOption
-                active={maskMode === "edit"}
-                accent="accent"
-                onClick={() => setMaskMode("edit")}
-                label="Open editor to correct the mask"
-                icon="✎"
-              />
-            </div>
-          </Panel>
-        )}
-
-        {currentItem?.predicted_class !== "irregular" ? (
-          <Panel title="Mask Editor" style={{ opacity: maskMode === "edit" ? 1 : 0.65 }}>
-            <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
-                <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid var(--border)", background: "#000" }} />
-                Black = brush draw features
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
-                <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid #888", background: "#fff" }} />
-                White = erase selected layer area
-              </div>
-            </div>
-
-            {maskMode !== "edit" ? (
-              <div style={{ fontSize: "0.74rem", color: "var(--muted)", marginBottom: 12 }}>
-                Editor disabled while &quot;Use mask as-is&quot; is selected.
-              </div>
             ) : null}
+            <ImageFrame
+              src={currentItem?.mask_image_url || ""}
+              caption={currentItem?.mask_filename || (isIrregular ? "binarized_mask.png" : "unet_mask_preview.png")}
+              height={260}
+            />
+            {currentItem?.confidence_image_url && !isIrregular ? (
+              <ImageFrame
+                src={currentItem.confidence_image_url}
+                caption="u-net_probability_map.png"
+                height={260}
+              />
+            ) : null}
+          </div>
 
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={() => setToolMode("draw")} style={toolButtonStyle(toolMode === "draw")}>
-                Brush Draw (black)
-              </button>
+          <div style={{ marginTop: 14 }}>
+            <p
+              style={{
+                fontSize: "0.76rem",
+                fontWeight: 600,
+                color: "var(--text)",
+                marginBottom: 8,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              Proceed with selected mask?
+            </p>
 
-              <button onClick={() => setToolMode("erase")} style={toolButtonStyle(toolMode === "erase")}>
-                Erase (white)
-              </button>
+            <RadioOption
+              active={maskMode === "use"}
+              accent="green"
+              onClick={() => setMaskMode("use")}
+              label="Use mask as-is"
+              icon="▶"
+            />
+            <RadioOption
+              active={maskMode === "edit"}
+              accent="accent"
+              onClick={() => setMaskMode("edit")}
+              label="Open editor to correct the mask"
+              icon="✎"
+            />
+          </div>
+        </Panel>
 
-              <button onClick={resetMask} style={secondaryButtonStyle}>
-                Reset Mask
-              </button>
+        <Panel title="Mask Editor" style={{ opacity: maskMode === "edit" ? 1 : 0.65 }}>
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
+              <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid var(--border)", background: "#000" }} />
+              Black = brush draw features
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
+              <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid #888", background: "#fff" }} />
+              White = erase selected layer area
+            </div>
+          </div>
 
-              <button onClick={undoLastStroke} style={secondaryButtonStyle}>
-                Undo
-              </button>
+          {maskMode !== "edit" ? (
+            <div style={{ fontSize: "0.74rem", color: "var(--muted)", marginBottom: 12 }}>
+              Editor disabled while &quot;Use mask as-is&quot; is selected.
+            </div>
+          ) : null}
 
-              <button onClick={redoLastStroke} style={secondaryButtonStyle}>
-                Redo
-              </button>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <button onClick={() => setToolMode("draw")} style={toolButtonStyle(toolMode === "draw")}>
+              Brush Draw (black)
+            </button>
 
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginLeft: 10,
-                  minWidth: 220,
-                }}
-              >
-                <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                  Brush px:
-                </span>
-                <input
-                  type="range"
-                  min={2}
-                  max={40}
-                  value={brushSize}
-                  onChange={(e) => setBrushSize(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: "var(--accent)" }}
-                />
-                <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 24 }}>
-                  {brushSize}
-                </span>
-              </div>
+            <button onClick={() => setToolMode("erase")} style={toolButtonStyle(toolMode === "erase")}>
+              Erase (white)
+            </button>
 
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  minWidth: 220,
-                }}
-              >
-                <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                  Mask opacity:
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={maskOverlayOpacity}
-                  onChange={(e) => setMaskOverlayOpacity(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: "var(--accent)" }}
-                />
-                <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 36 }}>
-                  {Math.round(maskOverlayOpacity * 100)}%
-                </span>
-              </div>
+            <button onClick={resetMask} style={secondaryButtonStyle}>
+              Reset Mask
+            </button>
+
+            <button onClick={undoLastStroke} style={secondaryButtonStyle}>
+              Undo
+            </button>
+
+            <button onClick={redoLastStroke} style={secondaryButtonStyle}>
+              Redo
+            </button>
+
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginLeft: 10,
+                minWidth: 220,
+              }}
+            >
+              <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                Brush px:
+              </span>
+              <input
+                type="range"
+                min={2}
+                max={40}
+                value={brushSize}
+                onChange={(e) => setBrushSize(Number(e.target.value))}
+                style={{ flex: 1, accentColor: "var(--accent)" }}
+              />
+              <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 24 }}>
+                {brushSize}
+              </span>
             </div>
 
             <div
               style={{
-                width: "100%",
-                minHeight: 300,
-                background: "var(--imageBg)",
-                border: "1px solid var(--border)",
-                borderRadius: 4,
+                flex: 1,
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                position: "relative",
-                overflow: "hidden",
+                gap: 8,
+                minWidth: 220,
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  backgroundImage:
-                    "linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px)",
-                  backgroundSize: "24px 24px",
-                }}
+              <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
+                Mask opacity:
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={maskOverlayOpacity}
+                onChange={(e) => setMaskOverlayOpacity(Number(e.target.value))}
+                style={{ flex: 1, accentColor: "var(--accent)" }}
               />
-              <div
-                style={{
-                  position: "absolute",
-                  width: 1,
-                  height: "100%",
-                  background: "rgba(0,212,255,0.1)",
-                  left: "50%",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  width: "100%",
-                  height: 1,
-                  background: "rgba(0,212,255,0.1)",
-                  top: "50%",
-                }}
-              />
+              <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 36 }}>
+                {Math.round(maskOverlayOpacity * 100)}%
+              </span>
+            </div>
+          </div>
 
-              <div style={{ position: "relative", zIndex: 1, padding: 12 }}>
-                <div
-                  style={{
-                    border: "1px solid var(--border)",
-                    borderRadius: 4,
-                    overflow: "hidden",
-                    background: "var(--imageBg)",
-                    boxShadow: "0 0 20px rgba(0,212,255,0.08)",
-                    position: "relative",
-                  }}
-                >
-                  {currentItem?.original_image_url?.trim() ? (
-                    <img
-                      src={currentItem.original_image_url}
-                      alt={currentItem.original_filename || "Original AFM"}
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "contain",
-                        display: "block",
-                        background: "var(--imageBg)",
-                        pointerEvents: "none",
-                        zIndex: 0,
-                      }}
-                    />
-                  ) : null}
-                  <canvas
-                    ref={canvasRef}
-                    width={canvasSize}
-                    height={canvasSize}
-                    onMouseDown={startDrawing}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={stopDrawing}
-                    onMouseMove={draw}
+          <div
+            style={{
+              width: "100%",
+              minHeight: 300,
+              background: "var(--imageBg)",
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundImage:
+                  "linear-gradient(var(--overlayGrid) 1px, transparent 1px), linear-gradient(90deg, var(--overlayGrid) 1px, transparent 1px)",
+                backgroundSize: "24px 24px",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                width: 1,
+                height: "100%",
+                background: "var(--overlayAxis)",
+                left: "50%",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                width: "100%",
+                height: 1,
+                background: "var(--overlayAxis)",
+                top: "50%",
+              }}
+            />
+
+            <div style={{ position: "relative", zIndex: 1, padding: 12 }}>
+              <div
+                style={{
+                  border: "1px solid var(--border)",
+                  borderRadius: 4,
+                  overflow: "hidden",
+                  background: "var(--imageBg)",
+                  boxShadow: "none",
+                  position: "relative",
+                }}
+              >
+                {currentItem?.original_image_url?.trim() ? (
+                  <img
+                    src={currentItem.original_image_url}
+                    alt={currentItem.original_filename || "Original AFM"}
                     style={{
-                      display: "block",
+                      position: "absolute",
+                      inset: 0,
                       width: "100%",
-                      maxWidth: 520,
-                      height: "auto",
-                      cursor: maskMode === "edit" ? "crosshair" : "not-allowed",
-                      pointerEvents: currentItem && maskMode === "edit" ? "auto" : "none",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
                       background: "var(--imageBg)",
-                      opacity: maskOverlayOpacity,
-                      position: "relative",
-                      zIndex: 1,
+                      pointerEvents: "none",
+                      zIndex: 0,
                     }}
                   />
-                </div>
+                ) : null}
+                <canvas
+                  ref={canvasRef}
+                  width={canvasSize}
+                  height={canvasSize}
+                  onMouseDown={startDrawing}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  onMouseMove={draw}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxWidth: 520,
+                    height: "auto",
+                    cursor: maskMode === "edit" ? "crosshair" : "not-allowed",
+                    pointerEvents: currentItem && maskMode === "edit" ? "auto" : "none",
+                    background: "var(--imageBg)",
+                    opacity: maskOverlayOpacity,
+                    position: "relative",
+                    zIndex: 1,
+                  }}
+                />
               </div>
             </div>
+          </div>
 
-            <p style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 8 }}>
-              {strokeCount} stroke{strokeCount === 1 ? "" : "s"} recorded for this image.
-              {currentItem?.item_id && editedMaskMap[currentItem.item_id] ? " Ready for batch analysis." : ""}
-            </p>
+          <p style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 8 }}>
+            {strokeCount} stroke{strokeCount === 1 ? "" : "s"} recorded for this image.
+            {currentItem?.item_id && editedMaskMap[currentItem.item_id] ? " Ready for batch analysis." : ""}
+          </p>
 
-            {maskMode === "edit" ? (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Stroke Layers</div>
+          {maskMode === "edit" ? (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Stroke Layers</div>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  paddingRight: 4,
+                }}
+              >
                 <div
+                  onClick={() => selectLayer(maskLayerId)}
                   style={{
-                    display: "grid",
-                    gap: 8,
-                    maxHeight: 220,
-                    overflowY: "auto",
-                    paddingRight: 4,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    border:
+                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
+                        ? "1px solid var(--accent)"
+                        : "1px solid var(--border)",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    background:
+                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
+                        ? "var(--accentTint)"
+                        : "var(--surface2)",
+                    boxShadow:
+                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
+                        ? "inset 0 0 0 1px var(--accent)"
+                        : "none",
+                    cursor: "pointer",
+                    transition: "all 140ms ease",
                   }}
                 >
-                  <div
-                    onClick={() => selectLayer(maskLayerId)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      border:
-                        selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                          ? "1px solid var(--accent)"
-                          : "1px solid var(--border)",
-                      borderRadius: 6,
-                      padding: "8px 10px",
-                      background:
-                        selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                          ? "rgba(0,212,255,0.12)"
-                          : "var(--surface2)",
-                      boxShadow:
-                        selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                          ? "0 0 0 1px rgba(0,212,255,0.35), 0 0 18px rgba(0,212,255,0.18)"
-                          : "none",
-                      cursor: "pointer",
-                      transition: "all 140ms ease",
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
-                        Mask
-                      </div>
-                      <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
-                        Base mask layer. Select this to erase directly from the mask.
-                      </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
+                      Mask
+                    </div>
+                    <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
+                      Base mask layer. Select this to erase directly from the mask.
                     </div>
                   </div>
-                  {selectedItemStrokes.length ? (
-                    selectedItemStrokes
-                      .map((stroke, index) => ({ stroke, index }))
-                      .reverse()
-                      .map(({ stroke, index }) => (
-                        <div
-                          key={stroke.id}
-                          onClick={() => selectLayer(stroke.id)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            gap: 10,
-                            border:
-                              selectedLayerId === stroke.id || flashLayerId === stroke.id
-                                ? "1px solid var(--accent)"
-                                : "1px solid var(--border)",
-                            borderRadius: 6,
-                            padding: "8px 10px",
-                            background:
-                              selectedLayerId === stroke.id || flashLayerId === stroke.id
-                                ? "rgba(0,212,255,0.12)"
-                                : "var(--surface2)",
-                            boxShadow:
-                              selectedLayerId === stroke.id || flashLayerId === stroke.id
-                                ? "0 0 0 1px rgba(0,212,255,0.35), 0 0 18px rgba(0,212,255,0.18)"
-                                : "none",
-                            cursor: "pointer",
-                            transition: "all 140ms ease",
-                          }}
-                        >
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
-                              Layer {index + 1}
-                            </div>
-                            <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
-                              Brush {stroke.brushSize}px
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeStrokeById(stroke.id);
-                            }}
-                            style={secondaryButtonStyle}
-                          >
-                            Remove Layer
-                          </button>
-                        </div>
-                      ))
-                  ) : (
-                    <div style={{ fontSize: "0.73rem", color: "var(--muted)" }}>
-                      Each new brush stroke becomes its own removable layer.
-                    </div>
-                  )}
                 </div>
+                {selectedItemStrokes.length ? (
+                  selectedItemStrokes
+                    .map((stroke, index) => ({ stroke, index }))
+                    .reverse()
+                    .map(({ stroke, index }) => (
+                      <div
+                        key={stroke.id}
+                        onClick={() => selectLayer(stroke.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 10,
+                          border:
+                            selectedLayerId === stroke.id || flashLayerId === stroke.id
+                              ? "1px solid var(--accent)"
+                              : "1px solid var(--border)",
+                          borderRadius: 6,
+                          padding: "8px 10px",
+                          background:
+                            selectedLayerId === stroke.id || flashLayerId === stroke.id
+                              ? "var(--accentTint)"
+                              : "var(--surface2)",
+                          boxShadow:
+                            selectedLayerId === stroke.id || flashLayerId === stroke.id
+                              ? "inset 0 0 0 1px var(--accent)"
+                              : "none",
+                          cursor: "pointer",
+                          transition: "all 140ms ease",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
+                            Layer {index + 1}
+                          </div>
+                          <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
+                            Brush {stroke.brushSize}px
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeStrokeById(stroke.id);
+                          }}
+                          style={secondaryButtonStyle}
+                        >
+                          Remove Layer
+                        </button>
+                      </div>
+                    ))
+                ) : (
+                  <div style={{ fontSize: "0.73rem", color: "var(--muted)" }}>
+                    Each new brush stroke becomes its own removable layer.
+                  </div>
+                )}
               </div>
-            ) : null}
-          </Panel>
-        ) : null}
+            </div>
+          ) : null}
+        </Panel>
 
         <div style={{ display: "flex", alignItems: "center", padding: "16px 0", flexWrap: "wrap", gap: 10 }}>
           <button onClick={handleRunAnalysis} disabled={isRunning || !batchData?.items?.length} style={runButtonStyle}>
@@ -866,9 +975,9 @@ export function UploadStage({
             padding: "10px 14px",
             borderRadius: 4,
             fontSize: "0.78rem",
-            border: "1px solid rgba(0,212,255,0.25)",
-            background: "rgba(0,212,255,0.06)",
-            color: "var(--accent)",
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            color: "var(--text)",
             whiteSpace: "pre-wrap",
           }}
         >
@@ -889,60 +998,16 @@ export function ResultsStage({
   badgeClass,
   showAdvancedAnalysisOptions,
   setShowAdvancedAnalysisOptions,
-  imageSizeUm,
-  setImageSizeUm,
-  colorwheelClusters,
-  setColorwheelClusters,
-  showColorwheelDebug,
-  setShowColorwheelDebug,
-  voronoiThresholdEdge,
-  setVoronoiThresholdEdge,
-  voronoiMaxSize,
-  setVoronoiMaxSize,
-  voronoiPackingEdges,
-  setVoronoiPackingEdges,
-  voronoiExtractDots,
-  setVoronoiExtractDots,
-  minCircularity,
-  setMinCircularity,
-  maxAspectRatio,
-  setMaxAspectRatio,
-  minArea,
-  setMinArea,
-  maxArea,
-  setMaxArea,
-  irregularUseAdaptive,
-  setIrregularUseAdaptive,
-  irregularUseNiblack,
-  setIrregularUseNiblack,
-  irregularCombineMode,
-  setIrregularCombineMode,
-  irregularAlpha,
-  setIrregularAlpha,
-  irregularAdaptiveMethod,
-  setIrregularAdaptiveMethod,
-  irregularAdaptiveBlockSize,
-  setIrregularAdaptiveBlockSize,
-  irregularCValue,
-  setIrregularCValue,
-  irregularKValue,
-  setIrregularKValue,
-  irregularNiblackWindow,
-  setIrregularNiblackWindow,
-  irregularBlur,
-  setIrregularBlur,
-  irregularBlurKsize,
-  setIrregularBlurKsize,
-  irregularEqualize,
-  setIrregularEqualize,
-  irregularClahe,
-  setIrregularClahe,
-  irregularInvertSpacing,
-  setIrregularInvertSpacing,
+  analysisParams,
+  onAnalysisParamsChange,
+  onRerunAnalysis,
+  onApplyAnalysisParamsToAll,
+  isRunning,
+  isAnalysisStale,
+  status,
   outputSections,
   setViewerImage,
   importantMetrics,
-  metricValueByKey,
 }: {
   batchData: UploadBatchResponse | null;
   currentItem: UploadItem | null;
@@ -952,63 +1017,49 @@ export function ResultsStage({
   badgeClass: (name?: string) => string;
   showAdvancedAnalysisOptions: boolean;
   setShowAdvancedAnalysisOptions: Dispatch<SetStateAction<boolean>>;
-  imageSizeUm: number;
-  setImageSizeUm: Dispatch<SetStateAction<number>>;
-  colorwheelClusters: number;
-  setColorwheelClusters: Dispatch<SetStateAction<number>>;
-  showColorwheelDebug: boolean;
-  setShowColorwheelDebug: Dispatch<SetStateAction<boolean>>;
-  voronoiThresholdEdge: number;
-  setVoronoiThresholdEdge: Dispatch<SetStateAction<number>>;
-  voronoiMaxSize: number;
-  setVoronoiMaxSize: Dispatch<SetStateAction<number>>;
-  voronoiPackingEdges: 4 | 6;
-  setVoronoiPackingEdges: Dispatch<SetStateAction<4 | 6>>;
-  voronoiExtractDots: boolean;
-  setVoronoiExtractDots: Dispatch<SetStateAction<boolean>>;
-  minCircularity: number;
-  setMinCircularity: Dispatch<SetStateAction<number>>;
-  maxAspectRatio: number;
-  setMaxAspectRatio: Dispatch<SetStateAction<number>>;
-  minArea: number;
-  setMinArea: Dispatch<SetStateAction<number>>;
-  maxArea: number;
-  setMaxArea: Dispatch<SetStateAction<number>>;
-  irregularUseAdaptive: boolean;
-  setIrregularUseAdaptive: Dispatch<SetStateAction<boolean>>;
-  irregularUseNiblack: boolean;
-  setIrregularUseNiblack: Dispatch<SetStateAction<boolean>>;
-  irregularCombineMode: "OR" | "AND" | "adaptive" | "niblack" | "weighted";
-  setIrregularCombineMode: Dispatch<
-    SetStateAction<"OR" | "AND" | "adaptive" | "niblack" | "weighted">
-  >;
-  irregularAlpha: number;
-  setIrregularAlpha: Dispatch<SetStateAction<number>>;
-  irregularAdaptiveMethod: "gaussian" | "mean";
-  setIrregularAdaptiveMethod: Dispatch<SetStateAction<"gaussian" | "mean">>;
-  irregularAdaptiveBlockSize: number;
-  setIrregularAdaptiveBlockSize: Dispatch<SetStateAction<number>>;
-  irregularCValue: number;
-  setIrregularCValue: Dispatch<SetStateAction<number>>;
-  irregularKValue: number;
-  setIrregularKValue: Dispatch<SetStateAction<number>>;
-  irregularNiblackWindow: number;
-  setIrregularNiblackWindow: Dispatch<SetStateAction<number>>;
-  irregularBlur: "none" | "gaussian" | "median" | "bilateral";
-  setIrregularBlur: Dispatch<SetStateAction<"none" | "gaussian" | "median" | "bilateral">>;
-  irregularBlurKsize: number;
-  setIrregularBlurKsize: Dispatch<SetStateAction<number>>;
-  irregularEqualize: boolean;
-  setIrregularEqualize: Dispatch<SetStateAction<boolean>>;
-  irregularClahe: boolean;
-  setIrregularClahe: Dispatch<SetStateAction<boolean>>;
-  irregularInvertSpacing: boolean;
-  setIrregularInvertSpacing: Dispatch<SetStateAction<boolean>>;
+  analysisParams: AnalysisParams;
+  onAnalysisParamsChange: (patch: Partial<AnalysisParams>) => void;
+  onRerunAnalysis: () => void;
+  onApplyAnalysisParamsToAll: () => void;
+  isRunning: boolean;
+  isAnalysisStale: boolean;
+  status: string;
   outputSections: OutputSection[];
   setViewerImage: Dispatch<SetStateAction<ViewerImage | null>>;
   importantMetrics: AnalysisResponse["metrics"];
-  metricValueByKey: Record<string, string>;
 }) {
+  // Controls edit the selected image's own settings; Rerun applies them.
+  const {
+    imageSizeUm,
+    colorwheelClusters,
+    showColorwheelDebug,
+    voronoiThresholdEdge,
+    voronoiMaxSize,
+    voronoiPackingEdges,
+    voronoiExtractDots,
+    minCircularity,
+    maxAspectRatio,
+    minArea,
+    maxArea,
+    irregularInvertSpacing,
+  } = analysisParams;
+  const setParam =
+    <K extends keyof AnalysisParams>(key: K) =>
+    (value: AnalysisParams[K]) =>
+      onAnalysisParamsChange({ [key]: value } as Pick<AnalysisParams, K>);
+  const setImageSizeUm = setParam("imageSizeUm");
+  const setColorwheelClusters = setParam("colorwheelClusters");
+  const setShowColorwheelDebug = setParam("showColorwheelDebug");
+  const setVoronoiThresholdEdge = setParam("voronoiThresholdEdge");
+  const setVoronoiMaxSize = setParam("voronoiMaxSize");
+  const setVoronoiPackingEdges = setParam("voronoiPackingEdges");
+  const setVoronoiExtractDots = setParam("voronoiExtractDots");
+  const setMinCircularity = setParam("minCircularity");
+  const setMaxAspectRatio = setParam("maxAspectRatio");
+  const setMinArea = setParam("minArea");
+  const setMaxArea = setParam("maxArea");
+  const setIrregularInvertSpacing = setParam("irregularInvertSpacing");
+
   return (
     <div>
       <Panel title="Batch Results Navigator" style={{ marginBottom: 18 }}>
@@ -1020,13 +1071,14 @@ export function ResultsStage({
               return (
                 <button
                   key={item.item_id}
+                  className="px-flat ws-row"
                   onClick={() => setSelectedItemId(item.item_id)}
                   style={{
                     textAlign: "left",
                     padding: "10px 12px",
                     borderRadius: 6,
                     border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
-                    background: isSelected ? "rgba(0,212,255,0.08)" : "var(--surface2)",
+                    background: isSelected ? "var(--accentTint)" : "var(--surface)",
                     color: "var(--text)",
                     cursor: "pointer",
                   }}
@@ -1085,8 +1137,8 @@ export function ResultsStage({
           padding: "10px 14px",
           borderRadius: 4,
           fontSize: "0.78rem",
-          border: "1px solid rgba(0,255,157,0.25)",
-          background: "rgba(0,255,157,0.06)",
+          border: "1px solid rgba(46,125,50,0.3)",
+          background: "rgba(46,125,50,0.07)",
           color: "var(--green)",
           marginBottom: 18,
         }}
@@ -1106,7 +1158,7 @@ export function ResultsStage({
           gap: 14,
           flexWrap: "wrap",
           background: "var(--surface)",
-          border: "1px solid rgba(0,212,255,0.2)",
+          border: "1px solid var(--border)",
           borderRadius: 6,
           padding: "12px 18px",
           marginBottom: 18,
@@ -1122,9 +1174,9 @@ export function ResultsStage({
             fontSize: "0.78rem",
             fontWeight: 700,
             letterSpacing: "0.1em",
-            background: "rgba(0,212,255,0.1)",
+            background: "var(--accentTint)",
             color: "var(--accent)",
-            border: "1px solid rgba(0,212,255,0.3)",
+            border: "1px solid transparent",
           }}
         >
           {currentItem ? badgeClass(currentItem.predicted_class) : "WAITING"}
@@ -1143,7 +1195,7 @@ export function ResultsStage({
             }}
           >
             <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              Advanced analysis controls
+              Analysis settings for {currentItem.original_filename}
             </div>
             <button
               type="button"
@@ -1167,7 +1219,7 @@ export function ResultsStage({
                     textTransform: "uppercase",
                   }}
                 >
-                  Advanced Analysis - Irregular Pipeline
+                  Spacing Analysis - Irregular Pipeline
                 </div>
               ) : null}
 
@@ -1226,144 +1278,56 @@ export function ResultsStage({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>
                   <SliderRow label="Min Circularity" min={0.1} max={1} step={0.05} value={minCircularity} onChange={setMinCircularity} />
                   <SliderRow label="Max Aspect Ratio" min={1} max={5} step={0.1} value={maxAspectRatio} onChange={setMaxAspectRatio} />
-                  <SliderRow label="Min Area" min={1} max={100} step={1} value={minArea} onChange={(value) => setMinArea(Math.round(value))} />
+                  <SliderRow label="Min Area (0 = keep all)" min={0} max={100} step={1} value={minArea} onChange={(value) => setMinArea(Math.round(value))} />
                   <SliderRow label="Max Area" min={50} max={2000} step={10} value={maxArea} onChange={(value) => setMaxArea(Math.round(value))} />
                 </div>
               ) : null}
 
               {currentItem.predicted_class === "irregular" ? (
-                <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-                  <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, background: "var(--surface2)" }}>
-                    <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Step 1 - Binarization</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-                      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 12, background: "var(--surface)" }}>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700, marginBottom: 10 }}>Threshold Methods</div>
-                        <div style={{ display: "grid", gap: 10 }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <input type="checkbox" checked={irregularUseAdaptive} onChange={(e) => setIrregularUseAdaptive(e.target.checked)} />
-                            Use Adaptive
-                          </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <input type="checkbox" checked={irregularUseNiblack} onChange={(e) => setIrregularUseNiblack(e.target.checked)} />
-                            Use Niblack
-                          </label>
-                          {irregularUseAdaptive && irregularUseNiblack ? (
-                            <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                              <span>Combine Logic</span>
-                              <select
-                                value={irregularCombineMode}
-                                onChange={(e) => setIrregularCombineMode(e.target.value as "OR" | "AND" | "adaptive" | "niblack" | "weighted")}
-                                style={{
-                                  width: "100%",
-                                  padding: "10px 12px",
-                                  borderRadius: 6,
-                                  border: "1px solid var(--border)",
-                                  background: "var(--surface2)",
-                                  color: "var(--text)",
-                                }}
-                              >
-                                <option value="OR">OR</option>
-                                <option value="AND">AND</option>
-                                <option value="adaptive">Adaptive only</option>
-                                <option value="niblack">Niblack only</option>
-                                <option value="weighted">Weighted</option>
-                              </select>
-                            </label>
-                          ) : null}
-                          {irregularUseAdaptive && irregularUseNiblack && irregularCombineMode === "weighted" ? (
-                            <SliderRow label="Alpha" min={0} max={1} step={0.05} value={irregularAlpha} onChange={setIrregularAlpha} />
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 12, background: "var(--surface)" }}>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700, marginBottom: 10 }}>Adaptive Parameters</div>
-                        <div style={{ display: "grid", gap: 10, opacity: irregularUseAdaptive ? 1 : 0.5 }}>
-                          <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <span>Adaptive Method</span>
-                            <select
-                              value={irregularAdaptiveMethod}
-                              onChange={(e) => setIrregularAdaptiveMethod(e.target.value as "gaussian" | "mean")}
-                              disabled={!irregularUseAdaptive}
-                              style={{
-                                width: "100%",
-                                padding: "10px 12px",
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
-                                background: "var(--surface2)",
-                                color: "var(--text)",
-                              }}
-                            >
-                              <option value="gaussian">Gaussian</option>
-                              <option value="mean">Mean</option>
-                            </select>
-                          </label>
-                          <SliderRow label="Block Size" min={3} max={101} step={2} value={irregularAdaptiveBlockSize} onChange={(value) => setIrregularAdaptiveBlockSize(Math.round(value) | 1)} />
-                          <SliderRow label="C Value" min={-50} max={30} step={1} value={irregularCValue} onChange={(value) => setIrregularCValue(Math.round(value))} />
-                        </div>
-                      </div>
-
-                      <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 12, background: "var(--surface)" }}>
-                        <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700, marginBottom: 10 }}>Niblack + Preprocess</div>
-                        <div style={{ display: "grid", gap: 10 }}>
-                          <div style={{ opacity: irregularUseNiblack ? 1 : 0.5 }}>
-                            <SliderRow label="Niblack k" min={-1} max={1} step={0.05} value={irregularKValue} onChange={setIrregularKValue} />
-                            <SliderRow label="Niblack Window" min={3} max={111} step={2} value={irregularNiblackWindow} onChange={(value) => setIrregularNiblackWindow(Math.round(value) | 1)} />
-                          </div>
-                          <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <span>Blur</span>
-                            <select
-                              value={irregularBlur}
-                              onChange={(e) => setIrregularBlur(e.target.value as "none" | "gaussian" | "median" | "bilateral")}
-                              style={{
-                                width: "100%",
-                                padding: "10px 12px",
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
-                                background: "var(--surface2)",
-                                color: "var(--text)",
-                              }}
-                            >
-                              <option value="none">None</option>
-                              <option value="gaussian">Gaussian</option>
-                              <option value="median">Median</option>
-                              <option value="bilateral">Bilateral</option>
-                            </select>
-                          </label>
-                          <SliderRow label="Blur Kernel" min={3} max={21} step={2} value={irregularBlurKsize} onChange={(value) => setIrregularBlurKsize(Math.round(value) | 1)} />
-                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <input type="checkbox" checked={irregularEqualize} onChange={(e) => setIrregularEqualize(e.target.checked)} />
-                            Equalize
-                          </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <input type="checkbox" checked={irregularClahe} onChange={(e) => setIrregularClahe(e.target.checked)} />
-                            CLAHE
-                          </label>
-                        </div>
-                      </div>
-                    </div>
+                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                  <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                    Binarization settings are set per image in Upload &amp; edit, where the mask previews as you adjust them.
                   </div>
-
-                  <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 14, background: "var(--surface2)" }}>
-                    <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Step 2 - Spacing Analysis</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
-                      <SliderRow label="Image Size (µm)" min={0.1} max={10} step={0.1} value={imageSizeUm} onChange={setImageSizeUm} />
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={irregularInvertSpacing} onChange={(e) => setIrregularInvertSpacing(e.target.checked)} />
-                        Invert feature phase for spacing
-                      </label>
-                    </div>
-                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
+                    <input type="checkbox" checked={irregularInvertSpacing} onChange={(e) => setIrregularInvertSpacing(e.target.checked)} />
+                    Invert feature phase for spacing
+                  </label>
                 </div>
               ) : null}
             </>
           ) : null}
+
+          <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" onClick={onRerunAnalysis} disabled={isRunning} style={runButtonStyle}>
+              {isRunning ? "Running..." : "⟳ Rerun Analysis"}
+            </button>
+            {(batchData?.items?.length || 0) > 1 ? (
+              <button type="button" onClick={onApplyAnalysisParamsToAll} disabled={isRunning} style={secondaryButtonStyle}>
+                Apply to All Images &amp; Rerun
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onAnalysisParamsChange(DEFAULT_ANALYSIS_PARAMS)}
+              disabled={isRunning}
+              style={secondaryButtonStyle}
+            >
+              Reset Parameters
+            </button>
+            <span style={{ fontSize: "0.72rem", color: isAnalysisStale ? "var(--yellow)" : "var(--muted)" }}>
+              {isRunning
+                ? status
+                : isAnalysisStale
+                  ? "Settings changed. Rerun to update the results."
+                  : status}
+            </span>
+          </div>
         </Panel>
       ) : null}
 
       <Panel title="Image Outputs" style={{ marginBottom: 18 }}>
-        {((currentItem?.predicted_class === "lines" || currentItem?.predicted_class === "mixed") && metricValueByKey.domain_spacing_nm) ||
-        (currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error) ? (
+        {/* Dots, lines and mixed report domain spacing in the Analysis Summary. */}
+        {currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error ? (
           <div style={{ marginBottom: 14 }}>
             <div style={smallLabelStyle}>Domain Spacing</div>
             <div
@@ -1374,13 +1338,6 @@ export function ResultsStage({
                 marginBottom: 10,
               }}
             >
-              {(currentItem?.predicted_class === "lines" || currentItem?.predicted_class === "mixed") &&
-              metricValueByKey.domain_spacing_nm ? (
-                <CompactMetric
-                  label="Domain spacing"
-                  value={`${Number(metricValueByKey.domain_spacing_nm).toFixed(2)} nm`}
-                />
-              ) : null}
               {currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error ? (
                 <>
                   <CompactMetric
@@ -1435,27 +1392,26 @@ export function ResultsStage({
 
       <Panel title="Analysis Summary" style={{ marginBottom: 18 }}>
         {importantMetrics.length ? (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem", border: "1px solid var(--border)" }}>
             <tbody>
-              {importantMetrics.map((metric) => (
-                <tr key={metric.key} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td
-                    style={{
-                      padding: "7px 0",
-                      color: "var(--muted)",
-                      textTransform: "uppercase",
-                      fontSize: "0.68rem",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
+              {importantMetrics.map((metric, idx) => (
+                <tr
+                  key={metric.key}
+                  style={{
+                    borderBottom: "1px solid var(--border)",
+                    background: idx % 2 ? "transparent" : "var(--surface2)",
+                  }}
+                >
+                  <td style={{ padding: "9px 12px", color: "var(--muted)", fontSize: "0.88rem" }}>
                     {metric.label}
                   </td>
                   <td
                     style={{
-                      padding: "7px 0",
-                      color: "var(--accent)",
-                      fontWeight: 700,
+                      padding: "9px 12px",
+                      color: "var(--text)",
+                      fontWeight: 600,
                       textAlign: "right",
+                      fontVariantNumeric: "tabular-nums",
                     }}
                   >
                     {metric.value}
@@ -1480,6 +1436,7 @@ export function ExportStage({
   currentAnalysis,
   isExporting,
   handleExportBatchPdf,
+  handleExportCsv,
   analysisMap,
 }: {
   handleNewJob: () => void;
@@ -1487,6 +1444,7 @@ export function ExportStage({
   currentAnalysis: AnalysisResponse | null;
   isExporting: boolean;
   handleExportBatchPdf: () => void;
+  handleExportCsv: () => void;
   analysisMap: Record<string, AnalysisResponse>;
 }) {
   return (
@@ -1508,6 +1466,13 @@ export function ExportStage({
             style={runButtonStyle}
           >
             {isExporting ? "Exporting..." : "⭳ Export Batch PDF"}
+          </button>
+          <button
+            onClick={handleExportCsv}
+            disabled={!Object.keys(analysisMap).length}
+            style={runButtonStyle}
+          >
+            ⭳ Export Results CSV
           </button>
         </div>
       </Panel>

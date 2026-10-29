@@ -16,7 +16,7 @@ def extract_dots(
     mask: np.ndarray,
     min_circularity: float = 0.6,
     max_aspect_ratio: float = 1.8,
-    min_area: int = 15,
+    min_area: int = 0,
     max_area: int = 1200,
 ) -> dict:
     """
@@ -32,6 +32,7 @@ def extract_dots(
         Maximum major/minor axis ratio to keep a component.
     min_area : int
         Minimum area (pixels) for a component to be considered a dot.
+        0 (the default) keeps dots of every size.
     max_area : int
         Maximum area (pixels) for a component to be considered a dot.
 
@@ -39,6 +40,7 @@ def extract_dots(
     -------
     dict with keys:
         dots_mask : np.ndarray  — uint8 mask with only dot centroids (5×5 blobs)
+        dots_region_mask : np.ndarray — uint8 mask with the full kept dot components
         total_components : int
         kept_dots : int
         rejected : int
@@ -48,15 +50,20 @@ def extract_dots(
         mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
     _, binary = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
 
-    # Morphological opening to clean noise
+    # Morphological opening separates touching dots. Components it would
+    # erase entirely are put back, so small dots are not removed.
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+    raw_labels = label(binary > 0)
+    survivors = np.unique(raw_labels[opened > 0])
+    opened[(raw_labels > 0) & ~np.isin(raw_labels, survivors)] = 255
 
     # Connected-component analysis
     labels_img = label(opened > 0)
     props = regionprops(labels_img)
 
     output = np.zeros_like(binary)
+    region_output = np.zeros_like(binary)
     kept = 0
 
     for prop in props:
@@ -69,19 +76,23 @@ def extract_dots(
             else float("inf")
         )
 
-        if (
-            min_area <= area <= max_area
-            and circularity >= min_circularity
-            and aspect <= max_aspect_ratio
-        ):
+        # Shape measures are meaningless for components a few pixels across,
+        # which are too small to be line segments; treat them as dots.
+        min_row, min_col, max_row, max_col = prop.bbox
+        tiny = (max_row - min_row) <= 3 and (max_col - min_col) <= 3
+        round_enough = tiny or (circularity >= min_circularity and aspect <= max_aspect_ratio)
+
+        if min_area <= area <= max_area and round_enough:
             cy, cx = map(int, prop.centroid)
             y1, y2 = max(cy - 2, 0), min(cy + 3, output.shape[0])
             x1, x2 = max(cx - 2, 0), min(cx + 3, output.shape[1])
             output[y1:y2, x1:x2] = 255
+            region_output[labels_img == prop.label] = 255
             kept += 1
 
     return {
         "dots_mask": output,
+        "dots_region_mask": region_output,
         "total_components": len(props),
         "kept_dots": kept,
         "rejected": len(props) - kept,

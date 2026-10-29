@@ -27,9 +27,9 @@ export function getOrCreateClientSessionId() {
 }
 
 export function getInitialThemeMode(): ThemeMode {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const saved = window.localStorage.getItem("afm_theme_mode");
-  return saved === "light" ? "light" : "dark";
+  return saved === "dark" || saved === "retro" ? saved : "light";
 }
 
 export function modelLabel(filename: string) {
@@ -126,70 +126,66 @@ export async function isBackendReachable(baseUrl: string) {
 }
 
 export const smallLabelStyle: CSSProperties = {
-  fontSize: "0.65rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.1em",
+  fontSize: "0.8rem",
   color: "var(--muted)",
-  marginBottom: 5,
-  fontWeight: 700,
+  marginBottom: 6,
+  fontWeight: 600,
 };
 
 export const runButtonStyle: CSSProperties = {
-  background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+  background: "var(--accent)",
   color: "#fff",
-  border: "none",
-  borderRadius: 5,
-  padding: "11px 32px",
-  fontSize: "0.95rem",
-  fontWeight: 700,
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
+  border: "1px solid var(--accent)",
+  borderRadius: 4,
+  padding: "8px 18px",
+  fontSize: "0.9rem",
+  fontWeight: 600,
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  boxShadow: "0 0 20px rgba(0,212,255,0.25)",
 };
 
 export const secondaryLargeButtonStyle: CSSProperties = {
-  background: "var(--surface2)",
-  boxShadow: "none",
+  background: "var(--surface)",
   border: "1px solid var(--border)",
-  color: "var(--muted)",
-  borderRadius: 5,
-  padding: "9px 20px",
-  fontSize: "0.82rem",
-  fontWeight: 700,
+  color: "var(--text)",
+  borderRadius: 4,
+  padding: "8px 18px",
+  fontSize: "0.9rem",
+  fontWeight: 600,
   cursor: "pointer",
 };
 
 export const secondaryButtonStyle: CSSProperties = {
-  background: "var(--surface2)",
+  background: "var(--surface)",
   border: "1px solid var(--border)",
-  color: "var(--muted)",
-  padding: "6px 14px",
+  color: "var(--text)",
+  padding: "6px 12px",
   borderRadius: 4,
-  fontSize: "0.73rem",
+  fontSize: "0.85rem",
   cursor: "pointer",
 };
 
 export const tabButtonStyle = (active: boolean): CSSProperties => ({
-  padding: "6px 16px",
-  background: active ? "rgba(0,212,255,0.1)" : "var(--surface)",
-  border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-  borderRadius: 4,
-  fontSize: "0.73rem",
+  padding: "10px 4px",
+  marginRight: 24,
+  background: "transparent",
+  border: "none",
+  borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+  fontSize: "0.95rem",
+  fontWeight: active ? 600 : 400,
   color: active ? "var(--accent)" : "var(--muted)",
   cursor: "pointer",
 });
 
 export const toolButtonStyle = (active: boolean): CSSProperties => ({
-  background: active ? "rgba(0,212,255,0.12)" : "var(--surface2)",
+  background: active ? "var(--accentTint)" : "var(--surface)",
   border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
-  color: active ? "var(--accent)" : "var(--muted)",
-  padding: "6px 14px",
+  color: active ? "var(--accent)" : "var(--text)",
+  padding: "6px 12px",
   borderRadius: 4,
-  fontSize: "0.73rem",
+  fontSize: "0.85rem",
+  fontWeight: active ? 600 : 400,
   cursor: "pointer",
-  boxShadow: active ? "0 0 8px rgba(0,212,255,0.15)" : "none",
 });

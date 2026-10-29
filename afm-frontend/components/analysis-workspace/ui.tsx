@@ -7,7 +7,6 @@ export function Panel({
   title,
   children,
   style,
-  accentColor,
 }: {
   title: string;
   children: ReactNode;
@@ -15,62 +14,31 @@ export function Panel({
   accentColor?: string;
 }) {
   return (
-    <div
+    <section
+      className="ws-panel"
       style={{
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: 6,
-        position: "relative",
-        overflow: "hidden",
+        boxShadow: "var(--shadow)",
         ...style,
       }}
     >
-      <div
+      <h2
+        className="ws-panel-title"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 2,
-          background: accentColor
-            ? accentColor
-            : "linear-gradient(90deg, var(--accent), var(--accent2))",
-          opacity: 0.6,
-        }}
-      />
-      <div
-        style={{
+          margin: 0,
           padding: "12px 18px",
           borderBottom: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          background: "var(--surface2)",
+          fontSize: "1rem",
+          fontWeight: 600,
+          color: "var(--text)",
         }}
       >
-        <div
-          style={{
-            width: 6,
-            height: 6,
-            background: accentColor || "var(--accent)",
-            borderRadius: "50%",
-          }}
-        />
-        <span
-          style={{
-            fontSize: "0.78rem",
-            fontWeight: 700,
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: accentColor || "var(--accent)",
-          }}
-        >
-          {title}
-        </span>
-      </div>
-
+        {title}
+      </h2>
       <div style={{ padding: 18 }}>{children}</div>
-    </div>
+    </section>
   );
 }
 
@@ -83,48 +51,38 @@ export function Step({
   number: string;
   state: "done" | "active" | "idle";
 }) {
-  const color =
-    state === "done"
-      ? "var(--green)"
-      : state === "active"
-      ? "var(--accent)"
-      : "var(--muted)";
-
+  const active = state === "active";
+  const done = state === "done";
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
-        fontSize: "0.72rem",
-        fontWeight: 500,
-        color,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
+        fontSize: "0.86rem",
+        fontWeight: active ? 600 : 400,
+        color: active || done ? "var(--text)" : "var(--muted)",
+        whiteSpace: "nowrap",
       }}
     >
       <div
+        className={`ws-step-dot${done ? " ws-step-done" : ""}`}
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: 4,
-          border: "1px solid currentColor",
+          width: 22,
+          height: 22,
+          borderRadius: "50%",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: "0.68rem",
-          fontWeight: 700,
+          fontSize: "0.75rem",
+          fontWeight: 600,
           flexShrink: 0,
-          background:
-            state === "active"
-              ? "rgba(0,212,255,0.1)"
-              : state === "done"
-              ? "rgba(0,255,157,0.1)"
-              : "transparent",
-          boxShadow: state === "active" ? "0 0 8px rgba(0,212,255,0.4)" : "none",
+          color: active || done ? "#fff" : "var(--muted)",
+          background: done ? "var(--green)" : active ? "var(--accent)" : "transparent",
+          border: active || done ? "none" : "1px solid var(--border)",
         }}
       >
-        {state === "done" ? "✓" : number}
+        {done ? "✓" : Number(number)}
       </div>
       {label}
     </div>
@@ -134,27 +92,16 @@ export function Step({
 export function StepLine({ done }: { done: boolean }) {
   return (
     <div
+      aria-hidden="true"
+      className={`ws-step-line${done ? " ws-step-line-done" : ""}`}
       style={{
         flex: 1,
         height: 1,
         background: done ? "var(--green)" : "var(--border)",
         margin: "0 14px",
-        minWidth: 30,
-        position: "relative",
+        minWidth: 24,
       }}
-    >
-      <span
-        style={{
-          position: "absolute",
-          right: -5,
-          top: -7,
-          fontSize: "0.55rem",
-          color: done ? "var(--green)" : "var(--border)",
-        }}
-      >
-        ▶
-      </span>
-    </div>
+    />
   );
 }
 
@@ -208,8 +155,8 @@ export function ImageFrame({
       </div>
       <div
         style={{
-          fontSize: "0.65rem",
-          padding: "4px 10px",
+          fontSize: "0.75rem",
+          padding: "5px 10px",
           background: "var(--surface2)",
           borderTop: "1px solid var(--border)",
           color: "var(--muted)",
@@ -255,23 +202,11 @@ export function CompactMetric({ label, value }: { label: string; value: string }
         border: "1px solid var(--border)",
         borderRadius: 6,
         padding: "10px 12px",
-        background: "var(--surface2)",
+        background: "var(--surface)",
       }}
     >
-      <div
-        style={{
-          fontSize: "0.64rem",
-          color: "var(--muted)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          marginBottom: 4,
-        }}
-      >
-        {label}
-      </div>
-      <div style={{ fontSize: "0.86rem", color: "var(--accent)", fontWeight: 700 }}>
-        {value}
-      </div>
+      <div style={{ fontSize: "0.78rem", color: "var(--muted)", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: "1.05rem", color: "var(--text)", fontWeight: 600 }}>{value}</div>
     </div>
   );
 }
@@ -304,7 +239,7 @@ export function SliderRow({
           onChange={(e) => onChange(Number(e.target.value))}
           style={{ flex: 1, accentColor: "var(--accent)" }}
         />
-        <span style={{ minWidth: 44, color: "var(--yellow)", fontWeight: 700 }}>
+        <span style={{ minWidth: 44, color: "var(--text)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
           {Number.isInteger(value) ? value : value.toFixed(step < 0.1 ? 3 : 1)}
         </span>
       </div>
@@ -339,8 +274,8 @@ export function RadioOption({
 
   const background = active
     ? accent === "green"
-      ? "rgba(0,255,157,0.05)"
-      : "rgba(0,212,255,0.05)"
+      ? "rgba(46,125,50,0.07)"
+      : "var(--accentTint)"
     : "var(--surface2)";
 
   return (

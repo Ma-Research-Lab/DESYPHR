@@ -2,104 +2,95 @@
 
 import Link from "next/link";
 
+const pageFont =
+  '"Source Sans 3", "Source Sans Pro", Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
 export default function LandingPage() {
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "32px 20px",
-        color: "#e8f0ff",
-        background:
-          "radial-gradient(circle at top left, rgba(0, 212, 255, 0.12), transparent 28%), linear-gradient(180deg, #07111f 0%, #091728 45%, #08111d 100%)",
-      }}
-    >
-      <section
+    <main style={{ minHeight: "100vh", background: "#f3f5f8", color: "#1f2a37", fontFamily: pageFont }}>
+      <nav
         style={{
-          width: "min(720px, 100%)",
-          padding: "36px 32px",
-          borderRadius: 24,
-          border: "1px solid rgba(138,203,255,0.14)",
-          background: "rgba(9, 20, 34, 0.9)",
-          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.28)",
-          textAlign: "center",
+          background: "#1d2b3a",
+          color: "#fff",
+          padding: "0 32px",
+          height: 56,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
         }}
       >
-        <div
-          style={{
-            fontSize: "0.78rem",
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "#8acbff",
-            marginBottom: 14,
-          }}
-        >
-          Ma Research Lab
-        </div>
+        <span style={{ fontWeight: 700, fontSize: "1.15rem" }}>AFM Analysis</span>
+        <span style={{ fontSize: "0.8rem", color: "#b8c4d2" }}>Ma Research Lab</span>
+      </nav>
 
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "clamp(2.3rem, 6vw, 4rem)",
-            lineHeight: 0.98,
-            letterSpacing: "-0.05em",
-          }}
-        >
+      <section style={{ maxWidth: 880, margin: "0 auto", padding: "72px 24px 48px" }}>
+        <h1 style={{ margin: 0, fontSize: "clamp(2rem, 5vw, 2.8rem)", fontWeight: 700, lineHeight: 1.15 }}>
           AFM Analysis Platform
         </h1>
-
-        <p
-          style={{
-            margin: "18px auto 0",
-            maxWidth: 560,
-            color: "rgba(232,240,255,0.74)",
-            fontSize: "1rem",
-            lineHeight: 1.75,
-          }}
-        >
-          Upload AFM images, review segmentation, run morphology-specific analysis,
-          and export results from one workspace.
+        <p style={{ margin: "14px 0 0", maxWidth: 620, color: "#5b6878", fontSize: "1.1rem", lineHeight: 1.6 }}>
+          Upload AFM images, review segmentation, run morphology-specific analysis, and export
+          results from one workspace.
         </p>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 12,
-            flexWrap: "wrap",
-            marginTop: 28,
-          }}
-        >
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 28 }}>
           <Link
             href="/analysis"
             style={{
-              padding: "13px 20px",
-              borderRadius: 999,
-              background: "linear-gradient(135deg, #00c8ff 0%, #2f7cff 100%)",
-              color: "#04101d",
-              fontWeight: 700,
+              padding: "10px 20px",
+              borderRadius: 4,
+              background: "#1a5fb4",
+              color: "#fff",
+              fontWeight: 600,
               textDecoration: "none",
             }}
           >
-            Open Analysis Workspace
+            Open analysis workspace
           </Link>
-
           <a
             href="https://www.maresearchlab.com/"
             target="_blank"
             rel="noreferrer"
             style={{
-              padding: "13px 20px",
-              borderRadius: 999,
-              border: "1px solid rgba(138,203,255,0.22)",
-              color: "#d9ebff",
-              textDecoration: "none",
+              padding: "10px 20px",
+              borderRadius: 4,
+              border: "1px solid #dbe1e8",
+              background: "#fff",
+              color: "#1f2a37",
               fontWeight: 600,
+              textDecoration: "none",
             }}
           >
             Ma Research Lab
           </a>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 16,
+            marginTop: 48,
+          }}
+        >
+          {[
+            ["Classify", "CNN morphology classification: dots, lines, mixed or irregular."],
+            ["Segment", "U-Net masks with per-image preprocessing and a mask editor."],
+            ["Measure", "Domain spacing and grain area, with CSV and PDF export."],
+          ].map(([title, body]) => (
+            <div
+              key={title}
+              style={{
+                background: "#fff",
+                border: "1px solid #dbe1e8",
+                borderRadius: 6,
+                padding: "16px 18px",
+                boxShadow: "0 1px 2px rgba(16,24,40,0.06)",
+              }}
+            >
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>
+              <div style={{ color: "#5b6878", fontSize: "0.92rem", lineHeight: 1.5 }}>{body}</div>
+            </div>
+          ))}
         </div>
       </section>
     </main>

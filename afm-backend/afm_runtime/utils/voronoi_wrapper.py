@@ -39,6 +39,22 @@ def _parse_average_area_pixels(group_pixel_counts_text: str):
         return None
 
 
+_GROUP_AREA_RE = re.compile(r"^Group\s+\d+:.*?([-+]?\d*\.?\d+)\s+total area", re.MULTILINE)
+
+
+def _parse_group_areas_pixels(group_pixel_counts_text: str):
+    """Per-group areas from lines like: 'Group 3: 12 elements, 225.99 total area'."""
+    if not group_pixel_counts_text:
+        return []
+    areas = []
+    for match in _GROUP_AREA_RE.finditer(group_pixel_counts_text):
+        try:
+            areas.append(float(match.group(1)))
+        except ValueError:
+            continue
+    return areas
+
+
 def _img_to_base64(img_path):
     """Convert an image file to a data-URI base64 string."""
     if not os.path.exists(img_path):
@@ -237,6 +253,10 @@ def run_voronoi(mask_array, image_size_um=1.0, threshold_edge=0.25, max_size=102
 
                     output['results']['average_group_area_pixels'] = float(avg_area_pixels)
                     output['results']['average_group_area_um2'] = avg_area_um2
+                    group_areas = [a for a in _parse_group_areas_pixels(group_pixel_counts_text) if math.isfinite(a)]
+                    if group_areas:
+                        output['results']['std_group_area_um2'] = float(np.std(group_areas)) * pixel_w_um * pixel_h_um
+                        output['results']['group_areas_um2'] = [a * pixel_w_um * pixel_h_um for a in group_areas]
                     output['results']['grain_size'] = avg_area_um2
                     output['results']['grain_size_unit'] = 'um^2'
                     output['results']['grain_size_source'] = 'group_average_area'

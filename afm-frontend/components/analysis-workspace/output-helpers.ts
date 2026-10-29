@@ -6,6 +6,14 @@ import type {
   UploadItem,
 } from "./types";
 
+const REPORT_METRIC_KEYS = [
+  "image_size_px",
+  "image_size_um",
+  "domain_spacing_nm",
+  "grain_area_um2",
+  "grain_area_std_um2",
+];
+
 function getCurrentClass(
   currentAnalysis: AnalysisResponse | null,
   currentItem: UploadItem | null
@@ -104,7 +112,7 @@ export function buildDisplayedOutputs(
     if (isMixedFlow && (/Dots Only Mask/i.test(item.label) || /Morphology Map/i.test(item.label))) {
       continue;
     }
-    if (isLineFlow && !/^Phase Cluster /i.test(item.label)) continue;
+    if (isLineFlow && !/^Phase Cluster |^Grain Map$/i.test(item.label)) continue;
     if (!isLineFlow && !isMixedFlow && /^Phase Cluster /i.test(item.label)) continue;
     pushOutput(outputs, item.label, item.url, item.label);
   }
@@ -185,7 +193,7 @@ export function buildOutputSections(
       sections.spacing.items.push(output);
     } else if (/Voronoi|Morphology Map|Dots Only Mask/i.test(output.label)) {
       sections.voronoi.items.push(output);
-    } else if (/Phase Image|FFT Magnitude|Radial FFT Profile|Phase Cluster/i.test(output.label)) {
+    } else if (/Phase Image|FFT Magnitude|Radial FFT Profile|Phase Cluster|Grain Map/i.test(output.label)) {
       sections.colorwheel.items.push(output);
     } else if (/Binarized Image|Skeleton Overlay|Spacing Histogram/i.test(output.label)) {
       sections.irregular.items.push(output);
@@ -204,26 +212,8 @@ export function getImportantMetrics(
   const metrics = currentAnalysis?.metrics || [];
   const currentClass = getCurrentClass(currentAnalysis, currentItem);
 
-  if (currentClass === "dots") {
-    return metrics.filter((metric) =>
-      ["grain_size", "periodicity", "average_group_area_um2"].includes(metric.key)
-    );
-  }
-
-  if (currentClass === "mixed") {
-    return metrics.filter((metric) =>
-      [
-        "grain_size",
-        "periodicity",
-        "average_group_area_um2",
-        "orientation_angle_deg",
-        "domain_spacing_nm",
-      ].includes(metric.key)
-    );
-  }
-
-  if (currentClass === "lines") {
-    return metrics.filter((metric) => ["domain_spacing_nm"].includes(metric.key));
+  if (currentClass === "dots" || currentClass === "lines" || currentClass === "mixed") {
+    return REPORT_METRIC_KEYS.flatMap((key) => metrics.filter((metric) => metric.key === key));
   }
 
   if (currentClass === "irregular") {
@@ -237,19 +227,35 @@ export function getImportantMetrics(
   return [];
 }
 
+const CSV_SPACING_KEYS = ["domain_spacing_nm", "mean_spacing_nm"];
+const CSV_GRAIN_AREA_KEYS = ["grain_area_um2", "average_group_area_um2"];
+
+function escapeCsvCell(value: string) {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+// One row per analyzed image: sample id (image name), classification, domain spacing, grain area.
+export function buildResultsCsv(
+  items: UploadItem[],
+  analysisMap: Record<string, AnalysisResponse>
+) {
+  const rows = [["sample_id", "classification", "domain_spacing_nm", "grain_area_um2"]];
+  for (const item of items) {
+    const analysis = analysisMap[item.item_id];
+    if (!analysis) continue;
+    const values = buildMetricValueByKey(analysis);
+    const pick = (keys: string[]) => values[keys.find((key) => values[key]) || ""] || "";
+    const sampleId = (analysis.original_filename || item.original_filename).replace(/\.[^.]+$/, "");
+    // The class the analysis actually ran with, including any manual override.
+    const classification = analysis.predicted_class || item.predicted_class || "";
+    rows.push([sampleId, classification, pick(CSV_SPACING_KEYS), pick(CSV_GRAIN_AREA_KEYS)]);
+  }
+  return rows.map((row) => row.map(escapeCsvCell).join(",")).join("\n") + "\n";
+}
+
 export function buildMetricValueByKey(currentAnalysis: AnalysisResponse | null) {
   const entries = (currentAnalysis?.metrics || []).map((metric) => [metric.key, metric.value]);
   return Object.fromEntries(entries) as Record<string, string>;
-}
-
-export function getIrregularMethod(
-  irregularUseAdaptive: boolean,
-  irregularUseNiblack: boolean
-) {
-  if (irregularUseAdaptive && irregularUseNiblack) return "both";
-  if (irregularUseAdaptive) return "adaptive";
-  if (irregularUseNiblack) return "niblack";
-  return "adaptive";
 }
 
 export function getSelectedItemStrokes(

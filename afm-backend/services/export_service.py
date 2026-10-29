@@ -75,7 +75,24 @@ def collect_output_blocks(result: dict, item: dict | None = None):
             continue
         seen.add(key)
         deduped.append((title, src, caption))
-    return deduped
+
+    # Original and Final Mask always lead; dots, lines and mixed then show only
+    # their key outputs, in this order. Other classes keep every output.
+    predicted_class = result.get("predicted_class", (item or {}).get("predicted_class", ""))
+    pdf_outputs = PDF_OUTPUTS_BY_CLASS.get(predicted_class)
+    if pdf_outputs is None:
+        return deduped
+    by_title = {}
+    for block in deduped:
+        by_title.setdefault(block[0], block)
+    return [by_title[title] for title in ("Original", "Final Mask", *pdf_outputs) if title in by_title]
+
+
+PDF_OUTPUTS_BY_CLASS = {
+    "dots": ("Voronoi Overlay",),
+    "lines": ("Grain Map",),
+    "mixed": ("Voronoi Overlay", "Grain Map"),
+}
 
 
 def build_single_result_pdf_bytes(batch_data: dict, current_item: dict, current_analysis: dict) -> bytes:
