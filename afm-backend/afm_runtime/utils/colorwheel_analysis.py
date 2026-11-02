@@ -215,11 +215,11 @@ def analyze_line_grains(orientation_masks, final_mask, image_size_um, spacing_nm
     """Grain analysis for line morphologies.
 
     orientation_masks: filtered orientation masks (bool, H×W), one per cluster.
-    final_mask: the inverted mask the colour wheel ran on; PhaseSubtraction kept
-        colour only where it is 0, so non-zero pixels are the other phase.
+    final_mask: zero on the microdomain (black) phase; PhaseSubtraction kept
+        colour only where it is 0, so non-zero pixels are the white phase.
 
-    One orientation mask always contains every domain (the inverse of the final
-    mask). It is used only for the black:white pixel ratio, not for grains.
+    One orientation mask always holds the whole white phase (no microdomains).
+    It is used only for the black:white pixel ratio, not for grains.
     In each remaining mask, microdomains smaller than 50% of the mode microdomain
     size are dropped, then stripes of a grain are grouped by a closing about one
     domain spacing wide; a grain's area is its own phase pixels, scaled up by the
@@ -347,8 +347,12 @@ def run_colorwheel(
     gpu = check_cupy_available()
     num_clusters = max(1, min(int(num_clusters), 5))
 
-    if invert:
-        mask_array = 255 - mask_array
+    # features: the microdomain phase as white (255). The mask shows
+    # microdomains in black, so by default it is inverted. Colour is kept on
+    # this phase, so grains and phase clusters follow the black microdomains.
+    features = 255 - mask_array if invert else mask_array
+    # Zero exactly where the features are; PhaseSubtraction keeps colour there.
+    feature_zero = 255 - features
 
     domain_spacing = None
     if compute_domain_spacing and image_size_um is not None:
@@ -356,7 +360,7 @@ def run_colorwheel(
             from .domain_spacing import compute_domain_spacing_from_array
 
             domain_spacing = compute_domain_spacing_from_array(
-                mask_array,
+                features,
                 float(image_size_um),
                 input_is_mask=True,
                 debug=bool(domain_spacing_debug),
@@ -368,14 +372,14 @@ def run_colorwheel(
             }
 
     # Compute orientation angle
-    angle = compute_average_angle(mask_array)
+    angle = compute_average_angle(features)
 
     # Color wheel processing
-    processor = ColorWheelProcessor(mask_array, gpu, color_wheel_origin=angle)
+    processor = ColorWheelProcessor(features, gpu, color_wheel_origin=angle)
     color_wheel_img = processor.process_image()
 
     # Phase subtraction
-    phase_sub = PhaseSubtraction(color_wheel_img, mask_array)
+    phase_sub = PhaseSubtraction(color_wheel_img, feature_zero)
     one_phase = phase_sub.subtract_black_from_input()
 
     # Create masks in temp dir
@@ -387,7 +391,7 @@ def run_colorwheel(
     try:
         spacing_nm = (domain_spacing or {}).get('spacing_nm') if (domain_spacing or {}).get('success', True) else None
         grains = analyze_line_grains(
-            orientation_masks, mask_array, image_size_um, spacing_nm,
+            orientation_masks, feature_zero, image_size_um, spacing_nm,
             exclude_mask=grain_exclude_mask,
         )
     except Exception as e:

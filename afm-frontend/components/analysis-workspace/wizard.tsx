@@ -2,6 +2,7 @@
 
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 
+import { FIT_QUERY } from "./ui";
 import { THEME_OPTIONS } from "./types";
 import type { ThemeMode, WorkspaceStep } from "./types";
 
@@ -21,7 +22,7 @@ export const WIZARD_STEPS: { id: WorkspaceStep; title: string; short: string; hi
 
 const sideButtonStyle = {
   background: "transparent",
-  border: "1px solid rgba(255,255,255,0.28)",
+  border: "1px solid var(--sideLine)",
   color: "var(--navText)",
   padding: "7px 12px",
   borderRadius: 4,
@@ -33,8 +34,8 @@ const themeSelectStyle = {
   width: "100%",
   padding: "6px 10px",
   borderRadius: 4,
-  border: "1px solid rgba(255,255,255,0.28)",
-  background: "rgba(255,255,255,0.08)",
+  border: "1px solid var(--sideLine)",
+  background: "var(--sideHover)",
   color: "var(--navText)",
   fontSize: "0.8rem",
 } as const;
@@ -110,7 +111,7 @@ export function WizardSidebar({
               aria-current={step.id === activeStep ? "step" : undefined}
             >
               <span className={`wiz-tab-node ws-step-dot${state === "done" ? " ws-step-done" : ""}`}>
-                {state === "done" ? "✓" : index + 1}
+                {index + 1}
               </span>
               <span style={{ minWidth: 0 }}>
                 <span className="wiz-tab-title">{step.short}</span>
@@ -227,6 +228,24 @@ export function WizardStyles() {
         color: var(--navText);
         overflow-y: auto;
         min-height: 0;
+        --sideLine: rgba(255, 255, 255, 0.28);
+        --sideHover: rgba(255, 255, 255, 0.08);
+        --sideActive: rgba(255, 255, 255, 0.12);
+        --sideActiveLine: rgba(255, 255, 255, 0.32);
+        --sideNode: rgba(255, 255, 255, 0.45);
+      }
+
+      /* Default (light) theme: a light menu with a dividing edge. */
+      :root[data-theme="light"] .wiz-side {
+        --navBg: var(--surface);
+        --navText: var(--text);
+        --navMuted: var(--muted);
+        --sideLine: var(--border);
+        --sideHover: var(--accentTint);
+        --sideActive: var(--accentTint);
+        --sideActiveLine: var(--accent);
+        --sideNode: var(--border);
+        border-right: 1px solid var(--border);
       }
 
       .wiz-brand {
@@ -265,7 +284,7 @@ export function WizardStyles() {
       }
 
       .wiz-tab:hover:not(:disabled) {
-        background: rgba(255, 255, 255, 0.08);
+        background: var(--sideHover);
       }
 
       .wiz-tab:disabled {
@@ -274,8 +293,8 @@ export function WizardStyles() {
       }
 
       .wiz-tab[aria-current="step"] {
-        background: rgba(255, 255, 255, 0.12);
-        border-color: rgba(255, 255, 255, 0.32);
+        background: var(--sideActive);
+        border-color: var(--sideActiveLine);
       }
 
       .wiz-tab-node {
@@ -287,7 +306,7 @@ export function WizardStyles() {
         justify-content: center;
         font-weight: 800;
         font-size: 0.78rem;
-        border: 2px solid rgba(255, 255, 255, 0.45);
+        border: 2px solid var(--sideNode);
         color: var(--navText);
       }
 
@@ -423,17 +442,144 @@ export function WizardStyles() {
         animation: wiz-pulse 1s ease-in-out infinite;
       }
 
-      /* Review step: settings on the left, mask and editor on the right; one column when narrow. */
-      .wiz-review {
+      /* ---------- single-window steps ----------
+         At desktop sizes every step fills the body exactly: columns of panels,
+         images sized to the space left. Smaller screens fall back to scrolling. */
+
+      .wiz-fit {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
-        gap: 18px;
-        align-items: start;
+        gap: 12px;
+        grid-template-columns: minmax(0, 1fr);
       }
 
-      @media (max-width: 1180px) {
+      .wiz-col {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .wiz-panel-fill {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .wiz-panel-fill > .wiz-panel-body {
+        flex: 1;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .wiz-grow {
+        flex: 1;
+        min-height: 320px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .wiz-fill-image {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+      }
+
+      .wiz-canvas-box {
+        container-type: size;
+        height: min(70vw, 560px);
+      }
+
+      .wiz-canvas-frame {
+        width: min(100cqw, 100cqh);
+        aspect-ratio: 1 / 1;
+      }
+
+      .wiz-fit-grid {
+        min-height: 0;
+      }
+
+      @media ${FIT_QUERY} {
+        .wiz-body {
+          padding: 12px var(--wiz-pad);
+        }
+
+        .wiz-body-inner {
+          height: 100%;
+          max-width: 1800px;
+        }
+
+        .wiz-fit {
+          height: 100%;
+          min-height: 0;
+        }
+
         .wiz-review {
-          grid-template-columns: minmax(0, 1fr);
+          grid-template-columns: minmax(220px, 270px) minmax(0, 1fr) minmax(290px, 340px);
+        }
+
+        .wiz-results {
+          grid-template-columns: minmax(240px, 290px) minmax(0, 1fr) minmax(210px, 260px);
+        }
+
+        .wiz-col > .ws-panel {
+          flex-shrink: 0;
+        }
+
+        .wiz-col > .wiz-panel-fill {
+          flex: 1 1 0;
+        }
+
+        .wiz-col > .wiz-panel-cap {
+          flex: 0 1 auto;
+          max-height: 40%;
+        }
+
+        .wiz-grow {
+          min-height: 0;
+        }
+
+        .wiz-fill-image {
+          flex: 1;
+          min-height: 0;
+          aspect-ratio: auto;
+        }
+
+        .wiz-canvas-box {
+          flex: 1;
+          height: auto;
+          min-height: 0;
+        }
+
+        .wiz-fit-grid {
+          flex: 1;
+        }
+
+        .wiz-head {
+          padding: 10px var(--wiz-pad);
+          display: flex;
+          align-items: baseline;
+          flex-wrap: wrap;
+          column-gap: 14px;
+        }
+
+        .wiz-head-count {
+          flex-basis: 100%;
+        }
+
+        .wiz-head-title {
+          margin: 2px 0 0;
+          font-size: 1.1rem;
+        }
+
+        .wiz-head-hint {
+          margin: 0;
+        }
+
+        .wiz-bar {
+          padding: 8px var(--wiz-pad);
         }
       }
 
@@ -449,6 +595,11 @@ export function WizardStyles() {
           gap: 10px;
           padding: 10px var(--wiz-pad);
           overflow: visible;
+        }
+
+        :root[data-theme="light"] .wiz-side {
+          border-right: none;
+          border-bottom: 1px solid var(--border);
         }
 
         .wiz-brand {

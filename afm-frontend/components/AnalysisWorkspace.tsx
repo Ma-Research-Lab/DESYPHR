@@ -83,11 +83,10 @@ export default function AnalysisWorkspace() {
   const [maskMode, setMaskMode] = useState<"use" | "edit">("edit");
   const [imageParamsMap, setImageParamsMap] = useState<Record<string, ImageParams>>({});
   const [resegmentingIds, setResegmentingIds] = useState<Record<string, boolean>>({});
-  const [showAdvancedImageOptions, setShowAdvancedImageOptions] = useState(false);
   const [analysisParamsMap, setAnalysisParamsMap] = useState<Record<string, AnalysisParams>>({});
   // Settings each item's current result was computed with, to flag stale results.
   const [analysisParamsUsedMap, setAnalysisParamsUsedMap] = useState<Record<string, AnalysisParams>>({});
-  const [showAdvancedAnalysisOptions, setShowAdvancedAnalysisOptions] = useState(false);
+  const [showAdvancedAnalysisOptions, setShowAdvancedAnalysisOptions] = useState(true);
   const [strokeCount, setStrokeCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -195,10 +194,6 @@ export default function AnalysisWorkspace() {
     });
     setStatus("Classification override saved. Run analysis to apply it.");
   }, [batchData]);
-
-  useEffect(() => {
-    setShowAdvancedAnalysisOptions(false);
-  }, [activeTab, currentItem?.item_id]);
 
   const currentImageParams = useMemo<ImageParams>(
     () => (currentItem && imageParamsMap[currentItem.item_id]) || DEFAULT_IMAGE_PARAMS,
@@ -1538,8 +1533,6 @@ export default function AnalysisWorkspace() {
                   saveCurrentCanvasForItem={saveCurrentCanvasForItem}
                   setSelectedItemId={setSelectedItemId}
                   badgeClass={badgeClass}
-                  showAdvancedImageOptions={showAdvancedImageOptions}
-                  setShowAdvancedImageOptions={setShowAdvancedImageOptions}
                   imageParams={currentImageParams}
                   onImageParamsChange={updateCurrentImageParams}
                   onApplyImageParamsToAll={applyImageParamsToAll}

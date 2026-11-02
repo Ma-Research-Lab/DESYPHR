@@ -8,7 +8,7 @@ import {
   smallLabelStyle,
   toolButtonStyle,
 } from "./helpers";
-import { CompactMetric, ImageFrame, Panel, RadioOption, ResultsImage, SliderRow } from "./ui";
+import { FillImage, FitGrid, FitTile, Panel, SliderRow } from "./ui";
 import { DEFAULT_ANALYSIS_PARAMS, DEFAULT_IMAGE_PARAMS } from "./types";
 import type {
   AnalysisParams,
@@ -186,8 +186,6 @@ export function ReviewStage({
   saveCurrentCanvasForItem,
   setSelectedItemId,
   badgeClass,
-  showAdvancedImageOptions,
-  setShowAdvancedImageOptions,
   imageParams,
   onImageParamsChange,
   onApplyImageParamsToAll,
@@ -225,8 +223,6 @@ export function ReviewStage({
   saveCurrentCanvasForItem: (itemId?: string) => void;
   setSelectedItemId: Dispatch<SetStateAction<string>>;
   badgeClass: (name?: string) => string;
-  showAdvancedImageOptions: boolean;
-  setShowAdvancedImageOptions: Dispatch<SetStateAction<boolean>>;
   imageParams: ImageParams;
   onImageParamsChange: (patch: Partial<ImageParams>) => void;
   onApplyImageParamsToAll: () => void;
@@ -256,24 +252,40 @@ export function ReviewStage({
   isResegmenting: boolean;
 }) {
   const isIrregular = currentItem?.predicted_class === "irregular";
-  const showImageOptions = showAdvancedImageOptions || isIrregular;
   const selectStyle = {
     width: "100%",
-    padding: "8px 10px",
+    padding: "4px 8px",
     borderRadius: 5,
     border: "1px solid var(--border)",
     background: "var(--surface)",
     color: "var(--text)",
   };
-  const optionBoxStyle = { border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" };
-  const checkboxRowStyle = { display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" };
+  const optionBoxStyle = { border: "1px solid var(--border)", borderRadius: 6, padding: 10, background: "var(--surface2)" };
+  const checkboxRowStyle = { display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text)" };
+
+  const isEditing = maskMode === "edit";
+  const compactButton = { ...secondaryButtonStyle, padding: "5px 10px", fontSize: "0.76rem" };
+  const compactTool = (active: boolean) => ({ ...toolButtonStyle(active), padding: "5px 10px", fontSize: "0.76rem" });
+  const layerChip = (active: boolean) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "3px 4px 3px 9px",
+    borderRadius: 4,
+    border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+    background: active ? "var(--accentTint)" : "var(--surface2)",
+    color: "var(--text)",
+    fontSize: "0.72rem",
+    cursor: "pointer",
+  });
+  const sliderLabel = { fontSize: "0.7rem", color: "var(--muted)", whiteSpace: "nowrap" as const };
 
   return (
-    <div className="wiz-review">
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <Panel title="Batch Items">
+    <div className="wiz-fit wiz-review">
+      <div className="wiz-col">
+        <Panel title="Batch Items" fill cap>
           {batchData?.items?.length ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {batchData.items.map((item) => {
                 const isSelected = item.item_id === currentItem?.item_id;
                 const isDone = !!analysisMap[item.item_id];
@@ -289,19 +301,20 @@ export function ReviewStage({
                     }}
                     style={{
                       textAlign: "left",
-                      padding: "10px 12px",
+                      padding: "6px 10px",
                       borderRadius: 6,
                       border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
                       background: isSelected ? "var(--accentTint)" : "var(--surface)",
                       color: "var(--text)",
                       cursor: "pointer",
+                      flexShrink: 0,
                     }}
                   >
-                    <div style={{ fontSize: "0.76rem", fontWeight: 700 }}>
+                    <div style={{ fontSize: "0.74rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {item.item_index}. {item.original_filename}
                     </div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4 }}>
-                      Class: {badgeClass(item.predicted_class)} ·{" "}
+                    <div style={{ fontSize: "0.66rem", color: "var(--muted)", marginTop: 2 }}>
+                      {badgeClass(item.predicted_class)} ·{" "}
                       {isDone ? "Analysis complete" : isEdited ? "Edited mask saved" : "Pending analysis"}
                     </div>
                   </button>
@@ -313,40 +326,29 @@ export function ReviewStage({
           )}
         </Panel>
 
-        <Panel title="Morphology Detection">
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <Panel title="Morphology Detection" fill>
+          <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
             <span
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 12px",
+                justifySelf: "start",
+                padding: "3px 10px",
                 borderRadius: 4,
-                fontSize: "0.78rem",
+                fontSize: "0.74rem",
                 fontWeight: 700,
                 letterSpacing: "0.1em",
                 background: "var(--accentTint)",
                 color: "var(--accent)",
-                border: "1px solid transparent",
               }}
             >
               CLASS {currentItem ? badgeClass(currentItem.predicted_class) : "NO IMAGE"}
             </span>
-
-            <label style={{ display: "grid", gap: 5, fontSize: "0.7rem", color: "var(--muted)", minWidth: 220 }}>
+            <label style={{ display: "grid", gap: 4, fontSize: "0.7rem", color: "var(--muted)" }}>
               <span>Classification override{classifierClass ? ` · CNN: ${badgeClass(classifierClass)}` : ""}</span>
               <select
                 value={currentItem?.predicted_class || ""}
                 disabled={!currentItem}
                 onChange={(event) => currentItem && onClassificationOverride(currentItem.item_id, event.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "9px 10px",
-                  borderRadius: 5,
-                  border: "1px solid var(--border)",
-                  background: "var(--surface2)",
-                  color: "var(--text)",
-                }}
+                style={selectStyle}
               >
                 <option value="dots">Dots</option>
                 <option value="lines">Lines</option>
@@ -354,204 +356,18 @@ export function ReviewStage({
                 <option value="irregular">Irregular</option>
               </select>
             </label>
-
-            <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
-              {currentItem ? "Select an override before running analysis" : "No prediction yet"}
-            </span>
           </div>
-
-          <div style={{ marginTop: 16 }}>
-            <div style={smallLabelStyle}>Original Image</div>
-            <ImageFrame
-              src={currentItem?.original_image_url || ""}
-              caption={currentItem?.saved_filename || "No image loaded"}
-              height={240}
-            />
-          </div>
-        </Panel>
-
-        <Panel title={isIrregular ? "Binarization Options" : "Image Advanced Options"} accentColor="var(--yellow)">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              {!currentItem
-                ? "Upload images to adjust per-image segmentation settings"
-                : isIrregular
-                  ? `Binarization settings for ${currentItem.original_filename}. The binarized mask updates as you change them.`
-                  : `Segmentation settings for ${currentItem.original_filename}`}
-            </div>
-            {!isIrregular ? (
-              <button
-                type="button"
-                onClick={() => setShowAdvancedImageOptions((prev) => !prev)}
-                style={secondaryButtonStyle}
-              >
-                {showAdvancedImageOptions ? "Hide Advanced Options" : "Show Advanced Options"}
-              </button>
-            ) : null}
-          </div>
-
-          {showImageOptions ? (
-            <fieldset disabled={!currentItem} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
-              <div style={{ marginTop: 14, display: "grid", gap: 14 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" }}>
-                    <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Preprocessing</div>
-                    <div style={{ display: "grid", gap: 12 }}>
-                      <SliderRow label="Denoise Strength" min={0} max={30} step={1} value={imageParams.denoise} onChange={(value) => onImageParamsChange({ denoise: Math.round(value) })} />
-                      <SliderRow label="Sharpen / Deblur" min={0} max={10} step={1} value={imageParams.sharpen} onChange={(value) => onImageParamsChange({ sharpen: Math.round(value) })} />
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={imageParams.grayscale} onChange={(e) => onImageParamsChange({ grayscale: e.target.checked })} />
-                        Convert to Grayscale
-                      </label>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                        <input type="checkbox" checked={imageParams.invertPixels} onChange={(e) => onImageParamsChange({ invertPixels: e.target.checked })} />
-                        Invert Pixels
-                      </label>
-                    </div>
-                  </div>
-
-                  {isIrregular ? (
-                    <div style={optionBoxStyle}>
-                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Threshold Methods</div>
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <label style={checkboxRowStyle}>
-                          <input type="checkbox" checked={imageParams.binarizeAdaptive} onChange={(e) => onImageParamsChange({ binarizeAdaptive: e.target.checked })} />
-                          Adaptive threshold
-                        </label>
-                        <label style={checkboxRowStyle}>
-                          <input type="checkbox" checked={imageParams.binarizeNiblack} onChange={(e) => onImageParamsChange({ binarizeNiblack: e.target.checked })} />
-                          Niblack threshold
-                        </label>
-                        {imageParams.binarizeAdaptive && imageParams.binarizeNiblack ? (
-                          <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                            <span>Combine Logic</span>
-                            <select
-                              value={imageParams.binarizeCombineMode}
-                              onChange={(e) => onImageParamsChange({ binarizeCombineMode: e.target.value as ImageParams["binarizeCombineMode"] })}
-                              style={selectStyle}
-                            >
-                              <option value="OR">OR</option>
-                              <option value="AND">AND</option>
-                              <option value="adaptive">Adaptive only</option>
-                              <option value="niblack">Niblack only</option>
-                              <option value="weighted">Weighted</option>
-                            </select>
-                          </label>
-                        ) : null}
-                        {imageParams.binarizeAdaptive && imageParams.binarizeNiblack && imageParams.binarizeCombineMode === "weighted" ? (
-                          <SliderRow label="Alpha (adaptive weight)" min={0} max={1} step={0.05} value={imageParams.binarizeAlpha} onChange={(value) => onImageParamsChange({ binarizeAlpha: value })} />
-                        ) : null}
-                        <label style={checkboxRowStyle}>
-                          <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
-                          Invert Mask
-                        </label>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 14, background: "var(--surface2)" }}>
-                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Postprocessing</div>
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <SliderRow label="Confidence Threshold" min={0.1} max={0.9} step={0.01} value={imageParams.threshold} onChange={(value) => onImageParamsChange({ threshold: value })} />
-                        <SliderRow label="Remove Noise" min={0} max={7} step={1} value={imageParams.morphology} onChange={(value) => onImageParamsChange({ morphology: Math.round(value) })} />
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
-                          <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
-                          Invert Mask
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {isIrregular ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                    <div style={{ ...optionBoxStyle, opacity: imageParams.binarizeAdaptive ? 1 : 0.5 }}>
-                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Adaptive</div>
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                          <span>Adaptive Method</span>
-                          <select
-                            value={imageParams.binarizeAdaptiveMethod}
-                            onChange={(e) => onImageParamsChange({ binarizeAdaptiveMethod: e.target.value as ImageParams["binarizeAdaptiveMethod"] })}
-                            disabled={!imageParams.binarizeAdaptive}
-                            style={selectStyle}
-                          >
-                            <option value="gaussian">Gaussian</option>
-                            <option value="mean">Mean</option>
-                          </select>
-                        </label>
-                        <SliderRow label="Block Size" min={3} max={101} step={2} value={imageParams.binarizeBlockSize} onChange={(value) => onImageParamsChange({ binarizeBlockSize: Math.round(value) | 1 })} />
-                        <SliderRow label="C Value" min={-50} max={30} step={1} value={imageParams.binarizeC} onChange={(value) => onImageParamsChange({ binarizeC: Math.round(value) })} />
-                      </div>
-                    </div>
-
-                    <div style={optionBoxStyle}>
-                      <div style={{ ...smallLabelStyle, marginBottom: 12 }}>Niblack + Filters</div>
-                      <div style={{ display: "grid", gap: 12 }}>
-                        <div style={{ display: "grid", gap: 12, opacity: imageParams.binarizeNiblack ? 1 : 0.5 }}>
-                          <SliderRow label="Niblack k" min={-1} max={1} step={0.05} value={imageParams.binarizeK} onChange={(value) => onImageParamsChange({ binarizeK: value })} />
-                          <SliderRow label="Niblack Window" min={3} max={111} step={2} value={imageParams.binarizeNiblackWindow} onChange={(value) => onImageParamsChange({ binarizeNiblackWindow: Math.round(value) | 1 })} />
-                        </div>
-                        <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                          <span>Blur</span>
-                          <select
-                            value={imageParams.binarizeBlur}
-                            onChange={(e) => onImageParamsChange({ binarizeBlur: e.target.value as ImageParams["binarizeBlur"] })}
-                            style={selectStyle}
-                          >
-                            <option value="none">None</option>
-                            <option value="gaussian">Gaussian</option>
-                            <option value="median">Median</option>
-                            <option value="bilateral">Bilateral</option>
-                          </select>
-                        </label>
-                        {imageParams.binarizeBlur === "gaussian" || imageParams.binarizeBlur === "median" ? (
-                          <SliderRow label="Blur Kernel" min={3} max={21} step={2} value={imageParams.binarizeBlurKsize} onChange={(value) => onImageParamsChange({ binarizeBlurKsize: Math.round(value) | 1 })} />
-                        ) : null}
-                        <label style={checkboxRowStyle}>
-                          <input type="checkbox" checked={imageParams.binarizeEqualize} onChange={(e) => onImageParamsChange({ binarizeEqualize: e.target.checked })} />
-                          Equalize histogram
-                        </label>
-                        <label style={checkboxRowStyle}>
-                          <input type="checkbox" checked={imageParams.binarizeClahe} onChange={(e) => onImageParamsChange({ binarizeClahe: e.target.checked })} />
-                          CLAHE
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => onImageParamsChange(DEFAULT_IMAGE_PARAMS)}
-                  style={secondaryButtonStyle}
-                >
-                  Reset Parameters
-                </button>
-                {(batchData?.items?.length || 0) > 1 ? (
-                  <button type="button" onClick={onApplyImageParamsToAll} style={secondaryButtonStyle}>
-                    Apply to All Images
-                  </button>
-                ) : null}
-              </div>
-            </fieldset>
-          ) : null}
+          <div style={{ ...smallLabelStyle, marginBottom: 4 }}>Original Image</div>
+          <FillImage src={currentItem?.original_image_url || ""} alt={currentItem?.original_filename || "Original image"} />
         </Panel>
       </div>
 
-      <div>
-        <Panel title={isIrregular ? "Binarized Mask" : "Binary Mask"} style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: "0.76rem", color: "var(--muted)", lineHeight: 1.65, marginBottom: 14 }}>
-            {isIrregular
-              ? "Irregular images skip the U-Net. The preprocessed image is binarized with the options on the left. "
-              : "Review the raw binary mask before analysis. "}
-            <span style={{ color: "var(--text)" }}>White regions</span> = detected features.{" "}
-            <span style={{ color: "var(--text)" }}>Black</span> = background.
-          </p>
-
-          {isIrregular ? (
-            <div style={{ display: "flex", gap: 14, alignItems: "center", marginBottom: 10, fontSize: "0.74rem", color: "var(--muted)" }}>
+      <Panel
+        title={isIrregular ? "Mask Editor · binarized mask" : "Mask Editor"}
+        fill
+        aside={
+          isIrregular ? (
+            <span style={{ fontSize: "0.72rem", fontWeight: 400, color: "var(--muted)", display: "flex", gap: 12 }}>
               <span>
                 Feature pixels:{" "}
                 <strong style={{ color: "var(--text)" }}>
@@ -561,215 +377,93 @@ export function ReviewStage({
               <span aria-live="polite" style={{ color: isResegmenting ? "var(--accent)" : "var(--muted)" }}>
                 {isResegmenting ? "Updating mask…" : "Mask up to date"}
               </span>
-            </div>
-          ) : null}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: currentItem?.confidence_image_url || isIrregular ? "1fr 1fr" : "1fr",
-              gap: 12,
-              opacity: isResegmenting ? 0.7 : 1,
-              transition: "opacity 120ms",
-            }}
-          >
-            {isIrregular ? (
-              <ImageFrame
-                src={currentItem?.preprocessed_image_url || currentItem?.original_image_url || ""}
-                caption="preprocessed_input.png"
-                height={260}
-              />
-            ) : null}
-            <ImageFrame
-              src={currentItem?.mask_image_url || ""}
-              caption={currentItem?.mask_filename || (isIrregular ? "binarized_mask.png" : "unet_mask_preview.png")}
-              height={260}
-            />
-            {currentItem?.confidence_image_url && !isIrregular ? (
-              <ImageFrame
-                src={currentItem.confidence_image_url}
-                caption="u-net_probability_map.png"
-                height={260}
-              />
-            ) : null}
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <p
-              style={{
-                fontSize: "0.76rem",
-                fontWeight: 600,
-                color: "var(--text)",
-                marginBottom: 8,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-              }}
-            >
-              Proceed with selected mask?
-            </p>
-
-            <RadioOption
-              active={maskMode === "use"}
-              accent="green"
+            </span>
+          ) : null
+        }
+      >
+        <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div role="radiogroup" aria-label="Mask" style={{ display: "inline-flex", marginRight: 6 }}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!isEditing}
               onClick={() => setMaskMode("use")}
-              label="Use mask as-is"
-              icon="▶"
-            />
-            <RadioOption
-              active={maskMode === "edit"}
-              accent="accent"
+              style={{ ...compactTool(!isEditing), borderRadius: "4px 0 0 4px" }}
+            >
+              ▶ Use as-is
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={isEditing}
               onClick={() => setMaskMode("edit")}
-              label="Open editor to correct the mask"
-              icon="✎"
-            />
-          </div>
-        </Panel>
-
-        <Panel title="Mask Editor" style={{ opacity: maskMode === "edit" ? 1 : 0.65 }}>
-          <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
-              <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid var(--border)", background: "#000" }} />
-              Black = brush draw features
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--muted)" }}>
-              <div style={{ width: 14, height: 14, borderRadius: 2, border: "1px solid #888", background: "#fff" }} />
-              White = erase selected layer area
-            </div>
-          </div>
-
-          {maskMode !== "edit" ? (
-            <div style={{ fontSize: "0.74rem", color: "var(--muted)", marginBottom: 12 }}>
-              Editor disabled while &quot;Use mask as-is&quot; is selected.
-            </div>
-          ) : null}
-
-          <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <button onClick={() => setToolMode("draw")} style={toolButtonStyle(toolMode === "draw")}>
-              Brush Draw (black)
-            </button>
-
-            <button onClick={() => setToolMode("erase")} style={toolButtonStyle(toolMode === "erase")}>
-              Erase (white)
-            </button>
-
-            <button onClick={resetMask} style={secondaryButtonStyle}>
-              Reset Mask
-            </button>
-
-            <button onClick={undoLastStroke} style={secondaryButtonStyle}>
-              Undo
-            </button>
-
-            <button onClick={redoLastStroke} style={secondaryButtonStyle}>
-              Redo
-            </button>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginLeft: 10,
-                minWidth: 220,
-              }}
+              style={{ ...compactTool(isEditing), borderRadius: "0 4px 4px 0", marginLeft: -1 }}
             >
-              <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                Brush px:
-              </span>
-              <input
-                type="range"
-                min={2}
-                max={40}
-                value={brushSize}
-                onChange={(e) => setBrushSize(Number(e.target.value))}
-                style={{ flex: 1, accentColor: "var(--accent)" }}
-              />
-              <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 24 }}>
-                {brushSize}
-              </span>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                minWidth: 220,
-              }}
-            >
-              <span style={{ fontSize: "0.68rem", color: "var(--muted)", whiteSpace: "nowrap" }}>
-                Mask opacity:
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={maskOverlayOpacity}
-                onChange={(e) => setMaskOverlayOpacity(Number(e.target.value))}
-                style={{ flex: 1, accentColor: "var(--accent)" }}
-              />
-              <span style={{ fontSize: "0.68rem", color: "var(--accent)", minWidth: 36 }}>
-                {Math.round(maskOverlayOpacity * 100)}%
-              </span>
-            </div>
+              ✎ Edit mask
+            </button>
           </div>
+          <button onClick={() => setToolMode("draw")} disabled={!isEditing} title="Paint features in black" style={compactTool(toolMode === "draw")}>
+            Draw
+          </button>
+          <button onClick={() => setToolMode("erase")} disabled={!isEditing} title="Erase the selected layer to white" style={compactTool(toolMode === "erase")}>
+            Erase
+          </button>
+          <button onClick={undoLastStroke} disabled={!isEditing} style={compactButton}>
+            Undo
+          </button>
+          <button onClick={redoLastStroke} disabled={!isEditing} style={compactButton}>
+            Redo
+          </button>
+          <button onClick={resetMask} disabled={!isEditing} style={compactButton}>
+            Reset
+          </button>
+        </div>
 
-          <div
-            style={{
-              width: "100%",
-              minHeight: 300,
-              background: "var(--imageBg)",
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundImage:
-                  "linear-gradient(var(--overlayGrid) 1px, transparent 1px), linear-gradient(90deg, var(--overlayGrid) 1px, transparent 1px)",
-                backgroundSize: "24px 24px",
-              }}
+        <div style={{ display: "flex", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}>
+            <span style={sliderLabel}>Brush px</span>
+            <input
+              type="range"
+              min={2}
+              max={40}
+              value={brushSize}
+              onChange={(e) => setBrushSize(Number(e.target.value))}
+              style={{ flex: 1, accentColor: "var(--accent)" }}
             />
-            <div
-              style={{
-                position: "absolute",
-                width: 1,
-                height: "100%",
-                background: "var(--overlayAxis)",
-                left: "50%",
-              }}
+            <span style={{ fontSize: "0.7rem", color: "var(--accent)", minWidth: 24 }}>{brushSize}</span>
+          </label>
+          <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}>
+            <span style={sliderLabel}>Mask opacity</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={maskOverlayOpacity}
+              onChange={(e) => setMaskOverlayOpacity(Number(e.target.value))}
+              style={{ flex: 1, accentColor: "var(--accent)" }}
             />
-            <div
-              style={{
-                position: "absolute",
-                width: "100%",
-                height: 1,
-                background: "var(--overlayAxis)",
-                top: "50%",
-              }}
-            />
+            <span style={{ fontSize: "0.7rem", color: "var(--accent)", minWidth: 36 }}>
+              {Math.round(maskOverlayOpacity * 100)}%
+            </span>
+          </label>
+        </div>
 
-            <div style={{ position: "relative", zIndex: 1, padding: 12 }}>
-              <div
-                style={{
-                  border: "1px solid var(--border)",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                  background: "var(--imageBg)",
-                  boxShadow: "none",
-                  position: "relative",
-                }}
-              >
+        <div
+          className="wiz-canvas-box"
+          style={{
+            background: "var(--imageBg)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflow: "hidden",
+            opacity: isResegmenting ? 0.7 : 1,
+            transition: "opacity 120ms",
+          }}
+        >
+          <div className="wiz-canvas-frame" style={{ position: "relative", background: "var(--imageBg)" }}>
                 {currentItem?.original_image_url?.trim() ? (
                   <img
                     src={currentItem.original_image_url}
@@ -798,8 +492,7 @@ export function ReviewStage({
                   style={{
                     display: "block",
                     width: "100%",
-                    maxWidth: 520,
-                    height: "auto",
+                    height: "100%",
                     cursor: maskMode === "edit" ? "crosshair" : "not-allowed",
                     pointerEvents: currentItem && maskMode === "edit" ? "auto" : "none",
                     background: "var(--imageBg)",
@@ -808,123 +501,212 @@ export function ReviewStage({
                     zIndex: 1,
                   }}
                 />
-              </div>
-            </div>
           </div>
+        </div>
 
-          <p style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 8 }}>
-            {strokeCount} stroke{strokeCount === 1 ? "" : "s"} recorded for this image.
-            {currentItem?.item_id && editedMaskMap[currentItem.item_id] ? " Ready for batch analysis." : ""}
-          </p>
-
-          {maskMode === "edit" ? (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Stroke Layers</div>
-              <div
-                style={{
-                  display: "grid",
-                  gap: 8,
-                  maxHeight: 220,
-                  overflowY: "auto",
-                  paddingRight: 4,
-                }}
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8, maxHeight: 62, overflowY: "auto", flexShrink: 0 }}>
+          {isEditing ? (
+            <>
+              <span style={{ ...sliderLabel, marginRight: 2 }}>Layers:</span>
+              <span
+                onClick={() => selectLayer(maskLayerId)}
+                title="Base mask layer. Select it to erase directly from the mask."
+                style={{ ...layerChip(selectedLayerId === maskLayerId || flashLayerId === maskLayerId), paddingRight: 9 }}
               >
-                <div
-                  onClick={() => selectLayer(maskLayerId)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 10,
-                    border:
-                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                        ? "1px solid var(--accent)"
-                        : "1px solid var(--border)",
-                    borderRadius: 6,
-                    padding: "8px 10px",
-                    background:
-                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                        ? "var(--accentTint)"
-                        : "var(--surface2)",
-                    boxShadow:
-                      selectedLayerId === maskLayerId || flashLayerId === maskLayerId
-                        ? "inset 0 0 0 1px var(--accent)"
-                        : "none",
-                    cursor: "pointer",
-                    transition: "all 140ms ease",
-                  }}
+                Mask
+              </span>
+              {selectedItemStrokes.map((stroke, index) => (
+                <span
+                  key={stroke.id}
+                  onClick={() => selectLayer(stroke.id)}
+                  title={`Brush ${stroke.brushSize}px`}
+                  style={layerChip(selectedLayerId === stroke.id || flashLayerId === stroke.id)}
                 >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
-                      Mask
+                  Layer {index + 1}
+                  <button
+                    type="button"
+                    aria-label={`Remove layer ${index + 1}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeStrokeById(stroke.id);
+                    }}
+                    className="px-flat"
+                    style={{ border: "none", background: "transparent", color: "var(--muted)", cursor: "pointer", padding: "0 4px", fontWeight: 700 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </>
+          ) : (
+            <span style={sliderLabel}>Using the mask as-is. Choose Edit mask to correct it.</span>
+          )}
+          <span style={{ ...sliderLabel, marginLeft: "auto" }}>
+            {strokeCount} stroke{strokeCount === 1 ? "" : "s"}
+            {currentItem?.item_id && editedMaskMap[currentItem.item_id] ? " · edits saved" : ""}
+          </span>
+        </div>
+      </Panel>
+
+      <Panel title={isIrregular ? "Binarization Options" : "Segmentation Options"}
+        fill
+        aside={isIrregular ? <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "var(--muted)" }}>Mask updates live</span> : null}
+      >
+        {!currentItem ? (
+          <div style={{ fontSize: "0.72rem", color: "var(--muted)", lineHeight: 1.5, marginBottom: 10 }}>
+            Upload images to adjust per-image segmentation settings.
+          </div>
+        ) : null}
+        <fieldset disabled={!currentItem} style={{ border: "none", margin: 0, padding: 0, minWidth: 0 }}>
+          <div style={{ marginBottom: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => onImageParamsChange(DEFAULT_IMAGE_PARAMS)}
+              style={{ ...compactButton, flex: 1 }}
+            >
+              Reset Parameters
+            </button>
+            {(batchData?.items?.length || 0) > 1 ? (
+              <button type="button" onClick={onApplyImageParamsToAll} style={{ ...compactButton, flex: 1 }}>
+                Apply to All Images
+              </button>
+            ) : null}
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10 }}>
+              <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 10, background: "var(--surface2)" }}>
+                <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Preprocessing</div>
+                <div style={{ display: "grid", gap: 7 }}>
+                  <SliderRow compact label="Denoise Strength" min={0} max={30} step={1} value={imageParams.denoise} onChange={(value) => onImageParamsChange({ denoise: Math.round(value) })} />
+                  <SliderRow compact label="Sharpen / Deblur" min={0} max={10} step={1} value={imageParams.sharpen} onChange={(value) => onImageParamsChange({ sharpen: Math.round(value) })} />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.grayscale} onChange={(e) => onImageParamsChange({ grayscale: e.target.checked })} />
+                      Convert to Grayscale
+                    </label>
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.invertPixels} onChange={(e) => onImageParamsChange({ invertPixels: e.target.checked })} />
+                      Invert Pixels
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {isIrregular ? (
+                <div style={optionBoxStyle}>
+                  <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Threshold Methods</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.binarizeAdaptive} onChange={(e) => onImageParamsChange({ binarizeAdaptive: e.target.checked })} />
+                      Adaptive threshold
+                    </label>
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.binarizeNiblack} onChange={(e) => onImageParamsChange({ binarizeNiblack: e.target.checked })} />
+                      Niblack threshold
+                    </label>
+                    {imageParams.binarizeAdaptive && imageParams.binarizeNiblack ? (
+                      <label style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.4fr)", alignItems: "center", gap: 8, fontSize: "0.72rem", fontWeight: 600, color: "var(--muted)" }}>
+                        <span>Combine Logic</span>
+                        <select
+                          value={imageParams.binarizeCombineMode}
+                          onChange={(e) => onImageParamsChange({ binarizeCombineMode: e.target.value as ImageParams["binarizeCombineMode"] })}
+                          style={selectStyle}
+                        >
+                          <option value="OR">OR</option>
+                          <option value="AND">AND</option>
+                          <option value="adaptive">Adaptive only</option>
+                          <option value="niblack">Niblack only</option>
+                          <option value="weighted">Weighted</option>
+                        </select>
+                      </label>
+                    ) : null}
+                    {imageParams.binarizeAdaptive && imageParams.binarizeNiblack && imageParams.binarizeCombineMode === "weighted" ? (
+                      <SliderRow compact label="Alpha (adaptive weight)" min={0} max={1} step={0.05} value={imageParams.binarizeAlpha} onChange={(value) => onImageParamsChange({ binarizeAlpha: value })} />
+                    ) : null}
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
+                      Invert Mask
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ border: "1px solid var(--border)", borderRadius: 6, padding: 10, background: "var(--surface2)" }}>
+                  <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Postprocessing</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <SliderRow compact label="Confidence Threshold" min={0.1} max={0.9} step={0.01} value={imageParams.threshold} onChange={(value) => onImageParamsChange({ threshold: value })} />
+                    <SliderRow compact label="Remove Noise" min={0} max={7} step={1} value={imageParams.morphology} onChange={(value) => onImageParamsChange({ morphology: Math.round(value) })} />
+                    <label style={checkboxRowStyle}>
+                      <input type="checkbox" checked={imageParams.invertMask} onChange={(e) => onImageParamsChange({ invertMask: e.target.checked })} />
+                      Invert Mask
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {isIrregular ? (
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10 }}>
+                <div style={{ ...optionBoxStyle, opacity: imageParams.binarizeAdaptive ? 1 : 0.5 }}>
+                  <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Adaptive</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <label style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.4fr)", alignItems: "center", gap: 8, fontSize: "0.72rem", fontWeight: 600, color: "var(--muted)" }}>
+                      <span>Adaptive Method</span>
+                      <select
+                        value={imageParams.binarizeAdaptiveMethod}
+                        onChange={(e) => onImageParamsChange({ binarizeAdaptiveMethod: e.target.value as ImageParams["binarizeAdaptiveMethod"] })}
+                        disabled={!imageParams.binarizeAdaptive}
+                        style={selectStyle}
+                      >
+                        <option value="gaussian">Gaussian</option>
+                        <option value="mean">Mean</option>
+                      </select>
+                    </label>
+                    <SliderRow compact label="Block Size" min={3} max={101} step={2} value={imageParams.binarizeBlockSize} onChange={(value) => onImageParamsChange({ binarizeBlockSize: Math.round(value) | 1 })} />
+                    <SliderRow compact label="C Value" min={-50} max={30} step={1} value={imageParams.binarizeC} onChange={(value) => onImageParamsChange({ binarizeC: Math.round(value) })} />
+                  </div>
+                </div>
+
+                <div style={optionBoxStyle}>
+                  <div style={{ ...smallLabelStyle, marginBottom: 8 }}>Niblack + Filters</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    <div style={{ display: "grid", gap: 7, opacity: imageParams.binarizeNiblack ? 1 : 0.5 }}>
+                      <SliderRow compact label="Niblack k" min={-1} max={1} step={0.05} value={imageParams.binarizeK} onChange={(value) => onImageParamsChange({ binarizeK: value })} />
+                      <SliderRow compact label="Niblack Window" min={3} max={111} step={2} value={imageParams.binarizeNiblackWindow} onChange={(value) => onImageParamsChange({ binarizeNiblackWindow: Math.round(value) | 1 })} />
                     </div>
-                    <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
-                      Base mask layer. Select this to erase directly from the mask.
+                    <label style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.4fr)", alignItems: "center", gap: 8, fontSize: "0.72rem", fontWeight: 600, color: "var(--muted)" }}>
+                      <span>Blur</span>
+                      <select
+                        value={imageParams.binarizeBlur}
+                        onChange={(e) => onImageParamsChange({ binarizeBlur: e.target.value as ImageParams["binarizeBlur"] })}
+                        style={selectStyle}
+                      >
+                        <option value="none">None</option>
+                        <option value="gaussian">Gaussian</option>
+                        <option value="median">Median</option>
+                        <option value="bilateral">Bilateral</option>
+                      </select>
+                    </label>
+                    {imageParams.binarizeBlur === "gaussian" || imageParams.binarizeBlur === "median" ? (
+                      <SliderRow compact label="Blur Kernel" min={3} max={21} step={2} value={imageParams.binarizeBlurKsize} onChange={(value) => onImageParamsChange({ binarizeBlurKsize: Math.round(value) | 1 })} />
+                    ) : null}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                      <label style={checkboxRowStyle}>
+                        <input type="checkbox" checked={imageParams.binarizeEqualize} onChange={(e) => onImageParamsChange({ binarizeEqualize: e.target.checked })} />
+                        Equalize histogram
+                      </label>
+                      <label style={checkboxRowStyle}>
+                        <input type="checkbox" checked={imageParams.binarizeClahe} onChange={(e) => onImageParamsChange({ binarizeClahe: e.target.checked })} />
+                        CLAHE
+                      </label>
                     </div>
                   </div>
                 </div>
-                {selectedItemStrokes.length ? (
-                  selectedItemStrokes
-                    .map((stroke, index) => ({ stroke, index }))
-                    .reverse()
-                    .map(({ stroke, index }) => (
-                      <div
-                        key={stroke.id}
-                        onClick={() => selectLayer(stroke.id)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 10,
-                          border:
-                            selectedLayerId === stroke.id || flashLayerId === stroke.id
-                              ? "1px solid var(--accent)"
-                              : "1px solid var(--border)",
-                          borderRadius: 6,
-                          padding: "8px 10px",
-                          background:
-                            selectedLayerId === stroke.id || flashLayerId === stroke.id
-                              ? "var(--accentTint)"
-                              : "var(--surface2)",
-                          boxShadow:
-                            selectedLayerId === stroke.id || flashLayerId === stroke.id
-                              ? "inset 0 0 0 1px var(--accent)"
-                              : "none",
-                          cursor: "pointer",
-                          transition: "all 140ms ease",
-                        }}
-                      >
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text)", fontWeight: 700 }}>
-                            Layer {index + 1}
-                          </div>
-                          <div style={{ fontSize: "0.66rem", color: "var(--muted)" }}>
-                            Brush {stroke.brushSize}px
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeStrokeById(stroke.id);
-                          }}
-                          style={secondaryButtonStyle}
-                        >
-                          Remove Layer
-                        </button>
-                      </div>
-                    ))
-                ) : (
-                  <div style={{ fontSize: "0.73rem", color: "var(--muted)" }}>
-                    Each new brush stroke becomes its own removable layer.
-                  </div>
-                )}
               </div>
-            </div>
-          ) : null}
-        </Panel>
+            ) : null}
+          </div>
 
-      </div>
+        </fieldset>
+      </Panel>
     </div>
   );
 }
@@ -944,7 +726,6 @@ export function ResultsStage({
   onApplyAnalysisParamsToAll,
   isRunning,
   isAnalysisStale,
-  status,
   outputSections,
   setViewerImage,
   importantMetrics,
@@ -1000,35 +781,64 @@ export function ResultsStage({
   const setMaxArea = setParam("maxArea");
   const setIrregularInvertSpacing = setParam("irregularInvertSpacing");
 
+  const seenSrc = new Set<string>();
+  const outputs = outputSections
+    .flatMap((section) =>
+      section.items.map((output, idx) => ({ ...output, key: `${section.title}-${output.label}-${idx}` })),
+    )
+    .filter((output) => !seenSrc.has(output.src) && !!seenSrc.add(output.src));
+  const spacing = currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error ? currentAnalysis.domain_spacing : null;
+  const summaryTiles = [
+    ...(spacing
+      ? [
+          { key: "spacing-mean", label: "Mean spacing", value: `${spacing.mean_spacing_nm.toFixed(2)} nm` },
+          { key: "spacing-median", label: "Median spacing", value: `${spacing.median_spacing_nm.toFixed(2)} nm` },
+          { key: "spacing-std", label: "Spacing std dev", value: `${spacing.std_spacing_nm.toFixed(2)} nm` },
+          ...(currentItem?.predicted_class !== "irregular"
+            ? [{ key: "spacing-n", label: "Measurements", value: `${spacing.num_measurements}` }]
+            : []),
+        ]
+      : []),
+    ...importantMetrics
+      .filter((metric) => !spacing || !["mean_spacing_nm", "median_spacing_nm", "std_spacing_nm"].includes(metric.key))
+      .map((metric) => ({ key: metric.key, label: metric.label, value: String(metric.value) })),
+  ];
+  const hasControls = !!currentItem && ["dots", "mixed", "lines", "irregular"].includes(currentItem.predicted_class);
+  const compactButton = { ...secondaryButtonStyle, padding: "5px 10px", fontSize: "0.76rem" };
+
   return (
-    <div>
-      <Panel title="Batch Results Navigator" style={{ marginBottom: 18 }}>
-        {batchData?.items?.length ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10 }}>
-            {batchData.items.map((item) => {
-              const isSelected = item.item_id === currentItem?.item_id;
-              const isDone = !!analysisMap[item.item_id];
-              return (
-                <button
-                  key={item.item_id}
-                  className="px-flat ws-row"
-                  onClick={() => setSelectedItemId(item.item_id)}
-                  style={{
-                    textAlign: "left",
-                    padding: "10px 12px",
-                    borderRadius: 6,
-                    border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
-                    background: isSelected ? "var(--accentTint)" : "var(--surface)",
-                    color: "var(--text)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+    <div className="wiz-fit wiz-results">
+      <div className="wiz-col">
+        <Panel title="Batch Results" fill cap>
+          {batchData?.items?.length ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {batchData.items.map((item) => {
+                const isSelected = item.item_id === currentItem?.item_id;
+                const isDone = !!analysisMap[item.item_id];
+                return (
+                  <button
+                    key={item.item_id}
+                    className="px-flat ws-row"
+                    onClick={() => setSelectedItemId(item.item_id)}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      textAlign: "left",
+                      padding: "5px 8px",
+                      borderRadius: 6,
+                      border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: isSelected ? "var(--accentTint)" : "var(--surface)",
+                      color: "var(--text)",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                  >
                     <div
                       style={{
-                        width: 54,
-                        height: 54,
-                        borderRadius: 4,
+                        width: 34,
+                        height: 34,
+                        borderRadius: 3,
                         border: "1px solid var(--border)",
                         overflow: "hidden",
                         background: "var(--imageBg)",
@@ -1044,108 +854,47 @@ export function ResultsStage({
                       ) : null}
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: "0.76rem",
-                          fontWeight: 700,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
+                      <div style={{ fontSize: "0.74rem", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {item.original_filename}
                       </div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: 4 }}>
+                      <div style={{ fontSize: "0.66rem", color: "var(--muted)", marginTop: 2 }}>
                         {badgeClass(item.predicted_class)} · {isDone ? "Ready to inspect" : "Not analyzed yet"}
                       </div>
                     </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={{ color: "var(--muted)", fontSize: "0.74rem" }}>No batch available.</div>
-        )}
-      </Panel>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "10px 14px",
-          borderRadius: 4,
-          fontSize: "0.78rem",
-          border: "1px solid rgba(46,125,50,0.3)",
-          background: "rgba(46,125,50,0.07)",
-          color: "var(--green)",
-          marginBottom: 18,
-        }}
-      >
-        <span>✔</span>
-        <span>
-          {currentAnalysis
-            ? `${badgeClass(currentItem?.predicted_class)} results ready`
-            : "No analysis result yet for the selected image."}
-        </span>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          flexWrap: "wrap",
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: 6,
-          padding: "12px 18px",
-          marginBottom: 18,
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "4px 12px",
-            borderRadius: 4,
-            fontSize: "0.78rem",
-            fontWeight: 700,
-            letterSpacing: "0.1em",
-            background: "var(--accentTint)",
-            color: "var(--accent)",
-            border: "1px solid transparent",
-          }}
-        >
-          {currentItem ? badgeClass(currentItem.predicted_class) : "WAITING"}
-        </span>
-      </div>
-
-      {currentItem && ["dots", "mixed", "lines", "irregular"].includes(currentItem.predicted_class) ? (
-        <Panel title="Analysis Controls" accentColor="var(--yellow)" style={{ marginBottom: 18 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
-              Analysis settings for {currentItem.original_filename}
+                  </button>
+                );
+              })}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowAdvancedAnalysisOptions((prev) => !prev)}
-              style={secondaryButtonStyle}
-            >
-              {showAdvancedAnalysisOptions ? "Hide Advanced Options" : "Show Advanced Options"}
-            </button>
-          </div>
+          ) : (
+            <div style={{ color: "var(--muted)", fontSize: "0.74rem" }}>No batch available.</div>
+          )}
+        </Panel>
 
+        {hasControls && currentItem ? (
+          <Panel
+            title="Analysis Controls"
+            fill
+            aside={
+              <span style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => onAnalysisParamsChange(DEFAULT_ANALYSIS_PARAMS)}
+                  disabled={isRunning}
+                  style={{ ...compactButton, fontWeight: 400 }}
+                >
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedAnalysisOptions((prev) => !prev)}
+                  style={{ ...compactButton, fontWeight: 400 }}
+                >
+                  {showAdvancedAnalysisOptions ? "Hide" : "Options"}
+                </button>
+              </span>
+            }
+          >
+            <div style={{ flex: 1 }}>
           {showAdvancedAnalysisOptions ? (
             <>
               {currentItem.predicted_class === "irregular" ? (
@@ -1155,7 +904,7 @@ export function ResultsStage({
                     fontWeight: 700,
                     letterSpacing: "0.04em",
                     color: "var(--text)",
-                    marginTop: 14,
+                    marginBottom: 10,
                     textTransform: "uppercase",
                   }}
                 >
@@ -1163,13 +912,13 @@ export function ResultsStage({
                 </div>
               ) : null}
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>
-                <SliderRow label="Image Size (µm)" min={0.1} max={10} step={0.1} value={imageSizeUm} onChange={setImageSizeUm} />
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, marginBottom: 8 }}>
+                <SliderRow compact label="Image Size (µm)" min={0.1} max={10} step={0.1} value={imageSizeUm} onChange={setImageSizeUm} />
 
                 {currentItem.predicted_class === "lines" || currentItem.predicted_class === "mixed" ? (
                   <>
-                    <SliderRow label="Clusters" min={2} max={5} step={1} value={colorwheelClusters} onChange={(value) => setColorwheelClusters(Math.round(value))} />
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
+                    <SliderRow compact label="Clusters" min={2} max={5} step={1} value={colorwheelClusters} onChange={(value) => setColorwheelClusters(Math.round(value))} />
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text)" }}>
                       <input
                         type="checkbox"
                         checked={showColorwheelDebug}
@@ -1182,27 +931,27 @@ export function ResultsStage({
 
                 {currentItem.predicted_class === "dots" || currentItem.predicted_class === "mixed" ? (
                   <>
-                    <SliderRow label="Voronoi Spacing Tolerance" min={0.05} max={0.5} step={0.01} value={voronoiThresholdEdge} onChange={setVoronoiThresholdEdge} />
-                    <SliderRow label="Voronoi Max Size" min={256} max={2048} step={128} value={voronoiMaxSize} onChange={(value) => setVoronoiMaxSize(Math.round(value))} />
-                    <label style={{ display: "grid", gap: 6, fontSize: "0.76rem", color: "var(--text)" }}>
-                      <span>Voronoi Packing Pattern</span>
+                    <SliderRow compact label="Voronoi Spacing Tolerance" min={0.05} max={0.5} step={0.01} value={voronoiThresholdEdge} onChange={setVoronoiThresholdEdge} />
+                    <SliderRow compact label="Voronoi Max Size" min={256} max={2048} step={128} value={voronoiMaxSize} onChange={(value) => setVoronoiMaxSize(Math.round(value))} />
+                    <label style={{ display: "grid", gridTemplateColumns: "minmax(0, 0.9fr) minmax(0, 1.1fr)", alignItems: "center", gap: 8, fontSize: "0.72rem", fontWeight: 600, color: "var(--muted)" }}>
+                      <span>Packing pattern</span>
                       <select
                         value={voronoiPackingEdges}
                         onChange={(e) => setVoronoiPackingEdges(Number(e.target.value) as 4 | 6)}
                         style={{
                           width: "100%",
-                          padding: "10px 12px",
-                          borderRadius: 6,
+                          padding: "4px 8px",
+                          borderRadius: 5,
                           border: "1px solid var(--border)",
                           background: "var(--surface2)",
                           color: "var(--text)",
                         }}
                       >
-                        <option value={6}>Hexagonal (6 edges)</option>
-                        <option value={4}>Square / cubic (4 edges)</option>
+                        <option value={6}>Hexagonal (6)</option>
+                        <option value={4}>Square (4)</option>
                       </select>
                     </label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text)" }}>
                       <input
                         type="checkbox"
                         checked={voronoiExtractDots}
@@ -1215,20 +964,20 @@ export function ResultsStage({
               </div>
 
               {(currentItem.predicted_class === "dots" || currentItem.predicted_class === "mixed") && voronoiExtractDots ? (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>
-                  <SliderRow label="Min Circularity" min={0.1} max={1} step={0.05} value={minCircularity} onChange={setMinCircularity} />
-                  <SliderRow label="Max Aspect Ratio" min={1} max={5} step={0.1} value={maxAspectRatio} onChange={setMaxAspectRatio} />
-                  <SliderRow label="Min Area (0 = keep all)" min={0} max={100} step={1} value={minArea} onChange={(value) => setMinArea(Math.round(value))} />
-                  <SliderRow label="Max Area" min={50} max={2000} step={10} value={maxArea} onChange={(value) => setMaxArea(Math.round(value))} />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 8, marginBottom: 8 }}>
+                  <SliderRow compact label="Min Circularity" min={0.1} max={1} step={0.05} value={minCircularity} onChange={setMinCircularity} />
+                  <SliderRow compact label="Max Aspect Ratio" min={1} max={5} step={0.1} value={maxAspectRatio} onChange={setMaxAspectRatio} />
+                  <SliderRow compact label="Min Area (0 = keep all)" min={0} max={100} step={1} value={minArea} onChange={(value) => setMinArea(Math.round(value))} />
+                  <SliderRow compact label="Max Area" min={50} max={2000} step={10} value={maxArea} onChange={(value) => setMaxArea(Math.round(value))} />
                 </div>
               ) : null}
 
               {currentItem.predicted_class === "irregular" ? (
-                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
                   <div style={{ fontSize: "0.74rem", color: "var(--muted)", lineHeight: 1.6 }}>
                     Binarization settings are set per image in Upload &amp; edit, where the mask previews as you adjust them.
                   </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.76rem", color: "var(--text)" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.72rem", color: "var(--text)" }}>
                     <input type="checkbox" checked={irregularInvertSpacing} onChange={(e) => setIrregularInvertSpacing(e.target.checked)} />
                     Invert feature phase for spacing
                   </label>
@@ -1237,124 +986,59 @@ export function ResultsStage({
             </>
           ) : null}
 
-          <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" onClick={onRerunAnalysis} disabled={isRunning} style={runButtonStyle}>
-              {isRunning ? "Running..." : "⟳ Rerun Analysis"}
-            </button>
-            {(batchData?.items?.length || 0) > 1 ? (
-              <button type="button" onClick={onApplyAnalysisParamsToAll} disabled={isRunning} style={secondaryButtonStyle}>
-                Apply to All Images &amp; Rerun
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => onAnalysisParamsChange(DEFAULT_ANALYSIS_PARAMS)}
-              disabled={isRunning}
-              style={secondaryButtonStyle}
-            >
-              Reset Parameters
-            </button>
-            <span style={{ fontSize: "0.72rem", color: isAnalysisStale ? "var(--yellow)" : "var(--muted)" }}>
-              {isRunning
-                ? status
-                : isAnalysisStale
-                  ? "Settings changed. Rerun to update the results."
-                  : status}
-            </span>
-          </div>
-        </Panel>
-      ) : null}
-
-      <Panel title="Image Outputs" style={{ marginBottom: 18 }}>
-        {/* Dots, lines and mixed report domain spacing in the Analysis Summary. */}
-        {currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error ? (
-          <div style={{ marginBottom: 14 }}>
-            <div style={smallLabelStyle}>Domain Spacing</div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              {currentAnalysis?.domain_spacing && !currentAnalysis.domain_spacing.error ? (
-                <>
-                  <CompactMetric
-                    label="Mean spacing"
-                    value={`${currentAnalysis.domain_spacing.mean_spacing_nm.toFixed(2)} nm`}
-                  />
-                  <CompactMetric
-                    label="Median spacing"
-                    value={`${currentAnalysis.domain_spacing.median_spacing_nm.toFixed(2)} nm`}
-                  />
-                  <CompactMetric
-                    label="Std dev"
-                    value={`${currentAnalysis.domain_spacing.std_spacing_nm.toFixed(2)} nm`}
-                  />
-                </>
-              ) : null}
-              {currentAnalysis?.domain_spacing && currentItem?.predicted_class !== "irregular" ? (
-                <CompactMetric
-                  label="Measurements"
-                  value={`${currentAnalysis.domain_spacing.num_measurements}`}
-                />
-              ) : null}
             </div>
-          </div>
-        ) : null}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          {outputSections.map((section) => (
-            <div key={section.title}>
-              <div style={smallLabelStyle}>{section.title}</div>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-                  gap: 14,
-                }}
-              >
-                {section.items.map((output, idx) => (
-                  <ResultsImage
-                    key={`${section.title}-${output.label}-${idx}`}
-                    label={output.label}
-                    src={output.src}
-                    caption={output.caption}
-                    onOpen={setViewerImage}
-                  />
-                ))}
+            <div style={{ display: "grid", gap: 6, flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={onRerunAnalysis} disabled={isRunning} style={{ ...runButtonStyle, flex: 1, justifyContent: "center", padding: "7px 10px" }}>
+                  {isRunning ? "Running..." : "⟳ Rerun"}
+                </button>
+                {(batchData?.items?.length || 0) > 1 ? (
+                  <button type="button" onClick={onApplyAnalysisParamsToAll} disabled={isRunning} style={{ ...compactButton, flex: 1 }}>
+                    Apply to all &amp; rerun
+                  </button>
+                ) : null}
               </div>
+              {isAnalysisStale && !isRunning ? (
+                <span style={{ fontSize: "0.7rem", color: "var(--yellow)" }}>Settings changed. Rerun to update the results.</span>
+              ) : null}
             </div>
-          ))}
-        </div>
-      </Panel>
+          </Panel>
+        ) : null}
+      </div>
 
-      <Panel title="Analysis Summary" style={{ marginBottom: 18 }}>
-        {importantMetrics.length ? (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem", border: "1px solid var(--border)" }}>
+      <div className="wiz-col">
+        <Panel
+          title={currentAnalysis ? `Image Outputs · ${badgeClass(currentItem?.predicted_class)}` : "Image Outputs"}
+          fill
+          aside={
+            outputs.length ? (
+              <span style={{ fontSize: "0.7rem", fontWeight: 400, color: "var(--muted)" }}>Click an image to enlarge</span>
+            ) : null
+          }
+        >
+          {outputs.length ? (
+            <FitGrid count={outputs.length}>
+              {outputs.map((output) => (
+                <FitTile key={output.key} label={output.label} src={output.src} caption={output.caption} onOpen={setViewerImage} />
+              ))}
+            </FitGrid>
+          ) : (
+            <div style={{ color: "var(--muted)", fontSize: "0.76rem" }}>No analysis result yet for the selected image.</div>
+          )}
+        </Panel>
+
+      </div>
+
+      <Panel title="Analysis Summary" fill>
+        {summaryTiles.length ? (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem" }}>
             <tbody>
-              {importantMetrics.map((metric, idx) => (
-                <tr
-                  key={metric.key}
-                  style={{
-                    borderBottom: "1px solid var(--border)",
-                    background: idx % 2 ? "transparent" : "var(--surface2)",
-                  }}
-                >
-                  <td style={{ padding: "9px 12px", color: "var(--muted)", fontSize: "0.88rem" }}>
-                    {metric.label}
-                  </td>
-                  <td
-                    style={{
-                      padding: "9px 12px",
-                      color: "var(--text)",
-                      fontWeight: 600,
-                      textAlign: "right",
-                      fontVariantNumeric: "tabular-nums",
-                    }}
-                  >
-                    {metric.value}
+              {summaryTiles.map((tile, idx) => (
+                <tr key={tile.key} style={{ borderBottom: "1px solid var(--border)", background: idx % 2 ? "transparent" : "var(--surface2)" }}>
+                  <td style={{ padding: "6px 8px", color: "var(--muted)", lineHeight: 1.3 }}>{tile.label}</td>
+                  <td style={{ padding: "6px 8px", color: "var(--text)", fontWeight: 600, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    {tile.value}
                   </td>
                 </tr>
               ))}
@@ -1362,7 +1046,7 @@ export function ResultsStage({
           </table>
         ) : (
           <div style={{ color: "var(--muted)", fontSize: "0.76rem" }}>
-            Domain spacing and branch-specific outputs above contain the main analysis results for this image.
+            The image outputs contain the main analysis results for this image.
           </div>
         )}
       </Panel>

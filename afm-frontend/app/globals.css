@@ -421,3 +421,54 @@ body {
   font-size: 8px !important;
   color: var(--px-ink) !important;
 }
+
+/* Single-window steps: smaller blocks, drop-downs and title strips so each
+   step still fits in the window. */
+:root[data-theme="retro"] .wiz-fit button:not(.px-flat) {
+  padding: 5px 9px !important;
+  font-size: 8px !important;
+}
+
+:root[data-theme="retro"] .wiz-fit select {
+  padding: 3px 26px 3px 6px !important;
+  font-size: 12px !important;
+}
+
+:root[data-theme="retro"] .wiz-fit .ws-panel-title {
+  padding: 7px 12px !important;
+  font-size: 10px !important;
+}
+
+:root[data-theme="retro"] .wiz-fit .ws-panel-title > span:not(:first-child) {
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  font-size: 11px;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+:root[data-theme="retro"] .wiz-fit input[type="range"] {
+  height: 16px;
+}
+
+:root[data-theme="retro"] .wiz-fit input[type="range"]::-webkit-slider-thumb {
+  width: 14px;
+  height: 16px;
+  margin-top: -6px;
+}
+
+:root[data-theme="retro"] .wiz-fit input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 16px;
+}
+
+:root[data-theme="retro"] .wiz-fit input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+}
+
+/* Step menu: finished steps keep their number on a green block. */
+:root[data-theme="retro"] .wiz-tab-node.ws-step-done {
+  background: var(--px-green) !important;
+  box-shadow: inset -3px 0 0 var(--px-green-dark), inset 3px 0 0 var(--px-green-light);
+  color: #fff !important;
+}
