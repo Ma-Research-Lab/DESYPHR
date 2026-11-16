@@ -465,3 +465,10 @@ body {
   width: 15px;
   height: 15px;
 }
+
+/* Step menu: finished steps keep their number on a green block. */
+:root[data-theme="retro"] .wiz-tab-node.ws-step-done {
+  background: var(--px-green) !important;
+  box-shadow: inset -3px 0 0 var(--px-green-dark), inset 3px 0 0 var(--px-green-light);
+  color: #fff !important;
+}

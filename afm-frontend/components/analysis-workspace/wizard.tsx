@@ -111,7 +111,7 @@ export function WizardSidebar({
               aria-current={step.id === activeStep ? "step" : undefined}
             >
               <span className={`wiz-tab-node ws-step-dot${state === "done" ? " ws-step-done" : ""}`}>
-                {state === "done" ? "✓" : index + 1}
+                {index + 1}
               </span>
               <span style={{ minWidth: 0 }}>
                 <span className="wiz-tab-title">{step.short}</span>
