@@ -1,0 +1,3 @@
+# Per-fold weights are reproducible from train.py; keep logs, histories and reports.
+runs/*/fold*/best_state.pth
+runs/*/best_state.pth

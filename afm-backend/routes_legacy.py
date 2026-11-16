@@ -6,7 +6,7 @@ from flask import abort, jsonify, make_response, request, send_file
 import settings as config
 from model_bundle import ModelBundle
 from services.export_service import build_batch_pdf_bytes, build_single_result_pdf_bytes
-from services.pipeline_service import analyze_one_item, process_single_file, resegment_item
+from services.pipeline_service import analyze_one_item, process_single_file, recrop_item, resegment_item
 from utils import sanitize_filename
 
 
@@ -104,6 +104,33 @@ def register_legacy_routes(app, models: ModelBundle):
                 return jsonify({"error": "Item image not found."}), 404
 
             return jsonify(resegment_item(models, item, params))
+
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/recrop-item", methods=["POST"])
+    def recrop_one_item():
+        try:
+            data = request.get_json(force=True)
+            item = data.get("item") or {}
+            try:
+                position = float(data.get("position", 0.5))
+            except (TypeError, ValueError):
+                return jsonify({"error": "position must be a number between 0 and 1."}), 400
+
+            results_root = config.RESULTS_DIR.resolve()
+            saved_path = item.get("saved_path", "")
+            source_path = (item.get("square_crop") or {}).get("source_path", "")
+            if not saved_path or not source_path:
+                return jsonify({"error": "This image was not cropped, so there is no crop to move."}), 400
+            for path in (saved_path, source_path):
+                resolved = Path(path).resolve()
+                if results_root not in resolved.parents or not resolved.exists():
+                    return jsonify({"error": "Item image not found."}), 404
+            if Path(saved_path).resolve().parent != Path(source_path).resolve().parent:
+                return jsonify({"error": "Item image not found."}), 404
+
+            return jsonify(recrop_item(models, item, position))
 
         except Exception as e:
             return jsonify({"error": str(e)}), 500

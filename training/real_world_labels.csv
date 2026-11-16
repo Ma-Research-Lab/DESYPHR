@@ -1,0 +1,7 @@
+file,label,note
+Screenshot_2026-11-13_at_2.15.54_PM.png,dots,confirmed by user
+Screenshot_2026-11-13_at_2.15.54_PM_tiled3x3.png,dots,same scan tiled 3x3
+dot.tiff,dots,app example (may be in training set)
+line.tiff,lines,app example (may be in training set)
+mixed.tiff,mixed,app example (may be in training set)
+irregular.png,irregular,app example (may be in training set)

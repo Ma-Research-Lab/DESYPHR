@@ -17,7 +17,7 @@ MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "tif", "tiff", "bmp"}
 
 DEFAULT_UNET_MODEL = os.environ.get("AFM_UNET_MODEL", "model_Exp6_Full_SelfAttn_and_Gates.pt")
-DEFAULT_CNN_MODEL = os.environ.get("AFM_CNN_MODEL", "cnn_rgb_classifier.pth")
+DEFAULT_CNN_MODEL = os.environ.get("AFM_CNN_MODEL", "cnn_grey_gap.pth")
 
 DEFAULT_CHECKPOINT_PATH = str(MODELS_DIR / DEFAULT_UNET_MODEL)
 CNN_MODEL_PATH = str(MODELS_DIR / DEFAULT_CNN_MODEL)

@@ -1,3 +1,16 @@
+export type SquareCrop = {
+  original_size: [number, number];
+  cropped_size: [number, number];
+  offset: [number, number];
+  // 0 = left/top edge, 0.5 = centre, 1 = right/bottom edge.
+  position: number;
+  kept_fraction: number;
+  axis: "width" | "height";
+  // Stored uncropped upload (server path) and a small preview of it.
+  source_path: string;
+  preview_url: string;
+};
+
 export type UploadItem = {
   item_id: string;
   item_index: number;
@@ -10,6 +23,9 @@ export type UploadItem = {
   predicted_class: string;
   confidence: number;
   probabilities: Record<string, number>;
+  scale_normalization?: ScaleNormalization | null;
+  // Set when a rectangular upload was centre-cropped to a square.
+  square_crop?: SquareCrop | null;
   cnn_model_name: string;
   unet_model_name: string;
   original_image_url: string;
@@ -141,6 +157,19 @@ export type AnalysisResponse = {
   raw_metrics?: MetricRow[];
   details: string;
   additional_outputs?: { label: string; url: string }[];
+};
+
+export type ScaleNormalization = {
+  applied: boolean;
+  // Feature period in native image pixels, and at the 217 px CNN input before rescaling.
+  period_px: number | null;
+  input_period_px: number | null;
+  target_period_px: number;
+  zoom: number;
+  mode: "none" | "crop" | "mirror-tile";
+  reason: string;
+  view_px?: number;
+  peak_rel_width?: number | null;
 };
 
 export type ViewerImage = {

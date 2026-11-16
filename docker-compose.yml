@@ -2,12 +2,13 @@ services:
   afm:
     build:
       context: .
-    image: afm-analysis-platform:latest
-    container_name: afm-analysis
+    image: afm-analysis-platform-noshap:latest
+    container_name: afm-analysis-noshap
     ports:
-      # host:container - change the left number if 3000 is already taken,
-      # e.g. "3001:3000" then open http://localhost:3001
-      - "3000:3000"
+      # host:container - this no-SHAP copy uses 3010 so it can run next to the
+      # retrain copy (3009), SHAP copy (3008), compact copy (3007) and the older
+      # ones (3000-3006); open http://localhost:3010
+      - "3010:3000"
     volumes:
       # Keep uploads and generated reports on your computer, so they survive
       # the container being stopped or rebuilt.

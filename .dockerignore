@@ -34,3 +34,6 @@ afm-frontend/.env.local
 
 .vscode
 .idea
+
+# Training data, runs and scripts are not needed to run the app.
+training

@@ -51,7 +51,7 @@ GitHub ZIP archives do not include Git LFS files, so the models are not in the
 ZIP. Download them separately:
 
 1. Go to the repository's **Releases** page.
-2. From the latest release, download `cnn_rgb_classifier.pth` and
+2. From the latest release, download `cnn_grey_gap.pth` and
    `model_Exp6_Full_SelfAttn_and_Gates.pt`.
 3. Place both files in `afm-backend/models/`.
 
@@ -91,8 +91,19 @@ docker builder prune -af
 
 1. **Upload.** Drag images onto the drop zone, or click to browse. Accepts
    `.png`, `.jpg`, `.tif`, `.tiff`. Multiple files are processed as a batch.
+   Rectangular images are cropped to a square (side = the shorter edge)
+   because the analysis assumes a square scan. The crop starts centred; the
+   app notes it in the status bar and above the original image on the review
+   step, where you can move it (drag the slider, click the preview, or pick
+   Left/Centre/Right) and click **Apply crop**. Applying re-runs the classifier
+   and segmentation for that image and clears its mask edits; a manual class
+   override is kept. Set **Image Size** to the side of the cropped square. The
+   uncropped file is kept in `afm-backend/uploads/` and in the item folder.
 2. **Detect.** Click **Upload & Detect**. The image is classified as `dots`,
    `lines`, `mixed`, or `irregular`, and a segmentation mask is generated.
+   The classifier is a greyscale CNN trained with random zoom and inverted
+   contrast, so it handles images at different magnifications and either
+   contrast polarity. See `training/README.md`.
 3. **Review the mask.** Click **Use mask as-is** to accept it, or open the
    **Mask Editor** to paint corrections and save. Measurement accuracy depends on
    mask accuracy.
@@ -155,7 +166,8 @@ Optional environment variables.
 | `AFM_PYTHON` | unset | Use a specific Python interpreter |
 | `AFM_MODELS_DIR` | `afm-backend/models` | Where to look for checkpoints |
 | `AFM_UNET_MODEL` | `model_Exp6_Full_SelfAttn_and_Gates.pt` | Segmentation checkpoint |
-| `AFM_CNN_MODEL` | `cnn_rgb_classifier.pth` | Classifier checkpoint |
+| `AFM_CNN_MODEL` | `cnn_grey_gap.pth` | Classifier checkpoint. `cnn_rgb_classifier.pth` selects the previous RGB model |
+| `AFM_CNN_SCALE_NORMALIZE` | auto | Rescale images whose feature size differs from the training scale before classifying. Automatic: on for the old RGB model, off for the greyscale model (trained with random zoom). `1` or `0` forces it on or off |
 
 ## Architecture
 

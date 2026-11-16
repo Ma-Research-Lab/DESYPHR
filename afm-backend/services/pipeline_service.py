@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+
 from afm_runtime.utils.colorwheel_analysis import run_colorwheel
 from afm_runtime.utils.dan_binarization import (
     analyze_spacing as dan_analyze_spacing,
@@ -31,6 +32,7 @@ from utils import (
     image_path_to_data_url,
     parse_numeric_metrics,
     save_edited_mask_from_base64,
+    save_square_crop,
     save_uploaded_image_from_bytes,
 )
 
@@ -206,7 +208,7 @@ def process_single_file(models: ModelBundle, file_storage, job_dir: Path, index:
 
     raw = file_storage.read()
     params = params or {}
-    saved_path = save_uploaded_image_from_bytes(raw, original_filename, item_dir, index)
+    saved_path, square_crop = save_uploaded_image_from_bytes(raw, original_filename, item_dir, index)
 
     with Image.open(saved_path) as image:
         image = image.copy()
@@ -232,7 +234,9 @@ def process_single_file(models: ModelBundle, file_storage, job_dir: Path, index:
         "predicted_class": predicted,
         "confidence": float(cls.get("confidence", 0.0)),
         "probabilities": probabilities,
-        "cnn_model_name": Path(models.cnn_classifier.model_path).name if getattr(models.cnn_classifier, "model_path", None) else "cnn_rgb_classifier.pth",
+        "scale_normalization": cls.get("scale_normalization"),
+        "square_crop": square_crop,
+        "cnn_model_name": Path(models.cnn_classifier.model_path).name if getattr(models.cnn_classifier, "model_path", None) else "cnn_grey_gap.pth",
         "unet_model_name": Path(models.model_manager.active_checkpoint).name if models.model_manager.active_checkpoint else "",
         "original_image_url": image_path_to_data_url(saved_path),
         "mask_image_url": mask_result["mask_data_url"],
@@ -245,6 +249,31 @@ def process_single_file(models: ModelBundle, file_storage, job_dir: Path, index:
         "black_pixel_percent": mask_result.get("black_pixel_percent"),
         "segmented_class": predicted,
         **_segmentation_settings(params),
+    }
+
+
+def recrop_item(models: ModelBundle, item_payload: dict, position: float) -> dict:
+    """Move the square crop of a rectangular upload and re-classify it.
+
+    The crop is re-cut from the stored original and written over the item's
+    input image, so every later step uses it. Segmentation is re-run
+    separately (resegment_item) with the item's own parameters.
+    """
+    saved_path = item_payload["saved_path"]
+    source_path = (item_payload.get("square_crop") or {}).get("source_path", "")
+    crop = save_square_crop(source_path, saved_path, position)
+
+    with Image.open(saved_path) as image:
+        cls = models.cnn_classifier.classify(image.copy())
+
+    return {
+        "item_id": item_payload.get("item_id", ""),
+        "square_crop": crop,
+        "predicted_class": cls.get("predicted_class", "unknown"),
+        "confidence": float(cls.get("confidence", 0.0)),
+        "probabilities": extract_class_probabilities(cls.get("probabilities", {})),
+        "scale_normalization": cls.get("scale_normalization"),
+        "original_image_url": image_path_to_data_url(saved_path),
     }
 
 
@@ -337,6 +366,19 @@ DOT_LINE_MAP_LINE = (128, 128, 128)
 DOT_LINE_MAP_DOT = (30, 90, 230)
 
 
+def _minority_phase_white(mask_array: np.ndarray) -> tuple[np.ndarray, float, bool]:
+    """Orient a binary mask so its minority phase is white (255).
+
+    Returns the oriented mask, the minority phase's pixel fraction, and
+    whether that phase was white in the input. A 50/50 tie keeps the
+    historical convention (features black in the U-Net mask).
+    """
+    white_fraction = float(np.mean(mask_array >= 128))
+    if white_fraction < 0.5:
+        return mask_array.copy(), white_fraction, True
+    return 255 - mask_array, 1.0 - white_fraction, False
+
+
 def _dot_line_map(feature_mask: np.ndarray, dots_region_mask: np.ndarray) -> Image.Image:
     """Colour a mixed mask: line features grey, dot features blue, background white.
 
@@ -414,10 +456,15 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
     mask_array = np.array(Image.open(final_mask_path).convert("L")) if final_mask_path else None
 
     if predicted_class in {"dots", "mixed"} and mask_array is not None:
-        # Mirror the reference frontend flow:
-        # the reviewed U-Net mask stays raw for display/editing, then the
-        # Voronoi branch inverts it before dot extraction / tessellation.
-        voronoi_input = 255 - mask_array
+        # The reviewed U-Net mask stays raw for display/editing. Voronoi always
+        # runs on the minority phase (the dots/cylinders), whichever polarity
+        # the mask has, so it is oriented here with that phase white (255)
+        # before dot extraction and tessellation.
+        voronoi_input, minority_fraction, minority_was_white = _minority_phase_white(mask_array)
+        detail_lines.append(
+            f"Voronoi phase: minority phase ({minority_fraction * 100:.1f}% of pixels, "
+            f"{'white' if minority_was_white else 'black'} in the mask)"
+        )
 
         # Measure domain spacing on the mask with all features, before dot
         # extraction strips the line features out of mixed images.
@@ -455,9 +502,9 @@ def analyze_one_item(models: ModelBundle, item_payload: dict, edited_mask_data_u
             }
             _append_data_output(additional_outputs, "Dots Only Mask", dots_mask_url)
             if predicted_class == "mixed" and dots_region_mask is not None:
-                # 255 - mask_array is the feature phase dot extraction ran on.
+                # The minority phase is what dot extraction ran on.
                 map_path = item_dir / "mixed_dot_line_map.png"
-                _dot_line_map(255 - mask_array, dots_region_mask).save(map_path)
+                _dot_line_map(_minority_phase_white(mask_array)[0], dots_region_mask).save(map_path)
                 _append_data_output(additional_outputs, "Dot & Line Map", image_path_to_data_url(str(map_path)))
 
         voronoi = run_voronoi(

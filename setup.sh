@@ -86,7 +86,7 @@ echo "Installing backend dependencies ..."
 echo ""
 echo "Checking model files ..."
 MISSING=0
-for model in cnn_rgb_classifier.pth model_Exp6_Full_SelfAttn_and_Gates.pt; do
+for model in cnn_grey_gap.pth model_Exp6_Full_SelfAttn_and_Gates.pt; do
     path="$ROOT_DIR/afm-backend/models/$model"
     if [ ! -f "$path" ]; then
         echo "  MISSING: afm-backend/models/$model"

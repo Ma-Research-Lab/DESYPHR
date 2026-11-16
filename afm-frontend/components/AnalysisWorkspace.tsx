@@ -83,11 +83,11 @@ export default function AnalysisWorkspace() {
   const [maskMode, setMaskMode] = useState<"use" | "edit">("edit");
   const [imageParamsMap, setImageParamsMap] = useState<Record<string, ImageParams>>({});
   const [resegmentingIds, setResegmentingIds] = useState<Record<string, boolean>>({});
-  const [showAdvancedImageOptions, setShowAdvancedImageOptions] = useState(false);
+  const [recroppingIds, setRecroppingIds] = useState<Record<string, boolean>>({});
   const [analysisParamsMap, setAnalysisParamsMap] = useState<Record<string, AnalysisParams>>({});
   // Settings each item's current result was computed with, to flag stale results.
   const [analysisParamsUsedMap, setAnalysisParamsUsedMap] = useState<Record<string, AnalysisParams>>({});
-  const [showAdvancedAnalysisOptions, setShowAdvancedAnalysisOptions] = useState(false);
+  const [showAdvancedAnalysisOptions, setShowAdvancedAnalysisOptions] = useState(true);
   const [strokeCount, setStrokeCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -195,10 +195,6 @@ export default function AnalysisWorkspace() {
     });
     setStatus("Classification override saved. Run analysis to apply it.");
   }, [batchData]);
-
-  useEffect(() => {
-    setShowAdvancedAnalysisOptions(false);
-  }, [activeTab, currentItem?.item_id]);
 
   const currentImageParams = useMemo<ImageParams>(
     () => (currentItem && imageParamsMap[currentItem.item_id]) || DEFAULT_IMAGE_PARAMS,
@@ -985,8 +981,19 @@ export default function AnalysisWorkspace() {
       }
 
       if (!options?.silent) {
+        const cropped = (data.items || []).filter((item: UploadItem) => item.square_crop);
+        const cropNote = cropped.length
+          ? ` ${cropped.length} rectangular image${cropped.length === 1 ? " was" : "s were"} centre-cropped to square: ` +
+            cropped
+              .map(
+                (item: UploadItem) =>
+                  `${item.original_filename} (${item.square_crop!.original_size.join("×")} → ${item.square_crop!.cropped_size.join("×")})`
+              )
+              .join(", ") +
+            "."
+          : "";
         setStatus(
-          `Upload complete. ${data.batch_count} image${data.batch_count === 1 ? "" : "s"} loaded.`
+          `Upload complete. ${data.batch_count} image${data.batch_count === 1 ? "" : "s"} loaded.${cropNote}`
         );
       }
       setActiveTab("review");
@@ -1110,6 +1117,57 @@ export default function AnalysisWorkspace() {
     (item: UploadItem) => classificationOverrides[item.item_id] ?? item.predicted_class,
     [classificationOverrides]
   );
+
+  // Move the square crop of a rectangular upload, re-run the CNN on the new
+  // crop, then re-segment it with the image's own settings. A manual class
+  // override, if any, is kept.
+  const recropItem = useCallback(async (itemId: string, position: number) => {
+    const item = batchData?.items.find((existing) => existing.item_id === itemId);
+    if (!item?.square_crop) return;
+    setRecroppingIds((prev) => ({ ...prev, [itemId]: true }));
+    setStatus(`Re-cropping ${item.original_filename} and re-running the classifier...`);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/recrop-item`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item: {
+            item_id: item.item_id,
+            saved_path: item.saved_path,
+            square_crop: { source_path: item.square_crop.source_path },
+          },
+          position,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(data.error || `Re-cropping failed for ${item.original_filename}.`);
+        return;
+      }
+      const updated: UploadItem = { ...item, ...data };
+      clearItemEditorState(itemId);
+      setBatchData((prev) =>
+        prev
+          ? { ...prev, items: prev.items.map((existing) => (existing.item_id === itemId ? updated : existing)) }
+          : prev
+      );
+      const override = classificationOverrides[itemId];
+      setStatus(
+        `Crop moved for ${item.original_filename}. CNN: ${data.predicted_class} (${Math.round(data.confidence * 100)}%)` +
+          (override ? `; your override (${override}) is kept.` : ".")
+      );
+      await resegmentItem(updated, imageParamsMap[itemId] || DEFAULT_IMAGE_PARAMS, override ?? updated.predicted_class);
+    } catch (error) {
+      setStatus(`Cannot reach backend at ${BACKEND_URL}. Start backend server first.`);
+      console.warn("Re-crop request failed", error);
+    } finally {
+      setRecroppingIds((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
+    }
+  }, [batchData, classificationOverrides, clearItemEditorState, imageParamsMap, resegmentItem]);
 
   const updateCurrentImageParams = useCallback((patch: Partial<ImageParams>) => {
     if (!batchData || !currentItem) return;
@@ -1535,11 +1593,11 @@ export default function AnalysisWorkspace() {
                   classifierClass={classifierClass}
                   onClassificationOverride={handleClassificationChange}
                   isResegmenting={!!(currentItem && resegmentingIds[currentItem.item_id])}
+                  onRecrop={recropItem}
+                  isRecropping={!!(currentItem && recroppingIds[currentItem.item_id])}
                   saveCurrentCanvasForItem={saveCurrentCanvasForItem}
                   setSelectedItemId={setSelectedItemId}
                   badgeClass={badgeClass}
-                  showAdvancedImageOptions={showAdvancedImageOptions}
-                  setShowAdvancedImageOptions={setShowAdvancedImageOptions}
                   imageParams={currentImageParams}
                   onImageParamsChange={updateCurrentImageParams}
                   onApplyImageParamsToAll={applyImageParamsToAll}
