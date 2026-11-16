@@ -231,7 +231,9 @@ def main():
                crow("old, inverted", rob["old_conf_when_wrong"], 1), crow("new, inverted", rob["new_conf_when_wrong"], 1), ""]
 
     # ---- real world -------------------------------------------------------
-    if args.final:
+    real_files = [f for f in glob.glob(str(args.real_dir / "*"))
+                  if Path(f).suffix.lower() in {".png", ".tif", ".tiff", ".jpg"}]
+    if args.final and real_files:
         from afm_runtime.utils.cnn_classifier import CnnClassifier
         import os
         truth = {}

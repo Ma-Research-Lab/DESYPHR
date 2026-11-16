@@ -1,3 +1,7 @@
 # Per-fold weights are reproducible from train.py; keep logs, histories and reports.
 runs/*/fold*/best_state.pth
 runs/*/best_state.pth
+
+# Internal real-world test images (not part of the training set)
+real_world/
+real_world_labels.csv

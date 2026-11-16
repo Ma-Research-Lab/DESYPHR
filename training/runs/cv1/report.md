@@ -65,18 +65,3 @@ Zoom > 1 = features bigger (crop); < 1 = smaller (mirror-tiled). The old model w
 | new, normal | 81% | 84% | 80% | 86% | 91% | 80% | 72% | 73% |
 | old, inverted | 92% | 88% | 88% | 91% | 90% | 99% | 100% | 100% |
 | new, inverted | 83% | 83% | 84% | 84% | 85% | 81% | 77% | 76% |
-
-## Real-world images
-
-| image | expected | old | old + rescale | new | new + rescale |
-|---|---|---|---|---|---|
-| Screenshot_2026-11-13_at_1.58.11_PM.png | ? | lines 100% | lines 100% | lines 100% | lines 100% |
-| Screenshot_2026-11-13_at_2.00.19_PM.png | ? | mixed 63% | mixed 98% | dots 100% | dots 100% |
-| Screenshot_2026-11-13_at_2.06.10_PM.png | ? | lines 100% | lines 100% | lines 100% | lines 100% |
-| Screenshot_2026-11-13_at_2.06.19_PM.png | ? | lines 75% | lines 75% | dots 100% | dots 100% |
-| Screenshot_2026-11-13_at_2.15.54_PM.png | dots | ✗ lines 100% | ✓ dots 95% | ✓ dots 100% | ✓ dots 100% |
-| Screenshot_2026-11-13_at_2.15.54_PM_tiled3x3.png | dots | ✓ dots 96% | ✓ dots 96% | ✓ dots 100% | ✓ dots 100% |
-| dot.tiff | dots | ✓ dots 99% | ✓ dots 99% | ✓ dots 100% | ✓ dots 100% |
-| irregular.png | irregular | ✓ irregular 100% | ✓ irregular 100% | ✓ irregular 100% | ✓ irregular 100% |
-| line.tiff | lines | ✓ lines 100% | ✓ lines 100% | ✓ lines 100% | ✓ lines 100% |
-| mixed.tiff | mixed | ✓ mixed 85% | ✓ mixed 85% | ✓ mixed 100% | ✓ mixed 100% |
