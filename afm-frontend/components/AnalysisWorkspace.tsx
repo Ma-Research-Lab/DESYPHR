@@ -982,15 +982,9 @@ export default function AnalysisWorkspace() {
 
       if (!options?.silent) {
         const cropped = (data.items || []).filter((item: UploadItem) => item.square_crop);
+        // Details are in the crop note on each image's review panel.
         const cropNote = cropped.length
-          ? ` ${cropped.length} rectangular image${cropped.length === 1 ? " was" : "s were"} centre-cropped to square: ` +
-            cropped
-              .map(
-                (item: UploadItem) =>
-                  `${item.original_filename} (${item.square_crop!.original_size.join("×")} → ${item.square_crop!.cropped_size.join("×")})`
-              )
-              .join(", ") +
-            "."
+          ? ` ${cropped.length} rectangular image${cropped.length === 1 ? " was" : "s were"} cropped to square; see the note on ${cropped.length === 1 ? "it" : "each"} in Review.`
           : "";
         setStatus(
           `Upload complete. ${data.batch_count} image${data.batch_count === 1 ? "" : "s"} loaded.${cropNote}`

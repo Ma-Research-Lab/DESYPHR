@@ -361,6 +361,10 @@ export function WizardStyles() {
 
       .wiz-main {
         display: grid;
+        /* minmax(0, 1fr), not the implicit auto column: an auto column grows to
+           the widest unbreakable line inside it (e.g. a long status message),
+           which pushed the step panels off the right edge. */
+        grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto minmax(0, 1fr) auto;
         min-width: 0;
         min-height: 0;
